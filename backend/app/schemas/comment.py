@@ -3,6 +3,16 @@ from datetime import datetime
 from pydantic import BaseModel
 
 
+class UserBrief(BaseModel):
+    id: uuid.UUID
+    name: str
+    email: str
+    role: str
+
+    class Config:
+        from_attributes = True
+
+
 class CommentCreate(BaseModel):
     message: str
     is_internal: bool = False
@@ -15,10 +25,13 @@ class CommentResponse(BaseModel):
     message: str
     is_internal: bool
     created_at: datetime
-    user: "UserBrief | None" = None
+    user: UserBrief | None = None
 
     class Config:
         from_attributes = True
+
+
+CommentResponse.model_rebuild()
 
 
 class AttachmentResponse(BaseModel):

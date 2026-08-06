@@ -14,3 +14,8 @@ export const getMe = async () => {
   const response = await api.get('/auth/me');
   return response.data;
 };
+
+export const updateOnlineStatus = async (online_status: string) => {
+  const response = await api.put('/auth/me/status', { online_status });
+  return response.data;
+};

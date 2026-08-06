@@ -88,3 +88,26 @@ class TicketListResponse(BaseModel):
     page: int
     per_page: int
     pages: int
+
+
+class SectorResponse(BaseModel):
+    id: uuid.UUID
+    name: str
+    description: str | None = None
+    is_active: bool = True
+
+    class Config:
+        from_attributes = True
+
+
+class AttachmentResponse(BaseModel):
+    id: str
+    ticket_id: str
+    original_filename: str
+    file_size: int
+    mime_type: str | None = None
+    uploader_name: str
+    created_at: datetime
+
+    class Config:
+        from_attributes = True

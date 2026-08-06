@@ -32,6 +32,7 @@ class UserResponse(BaseModel):
     sector: str
     avatar_url: str | None = None
     is_active: bool
+    online_status: str = "offline"
     created_at: datetime
 
     class Config:
@@ -40,5 +41,6 @@ class UserResponse(BaseModel):
 
 class TokenResponse(BaseModel):
     access_token: str
+    refresh_token: str
     token_type: str = "bearer"
     user: UserResponse

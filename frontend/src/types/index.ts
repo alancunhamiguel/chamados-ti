@@ -6,6 +6,7 @@ export interface User {
   sector: string;
   avatar_url?: string;
   is_active: boolean;
+  online_status: 'disponivel' | 'ocupado' | 'em_atendimento' | 'offline';
   created_at: string;
 }
 

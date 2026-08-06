@@ -43,3 +43,4 @@ class Ticket(Base):
     comments = relationship("TicketComment", back_populates="ticket", cascade="all, delete-orphan")
     attachments = relationship("TicketAttachment", back_populates="ticket", cascade="all, delete-orphan")
     history = relationship("TicketHistory", back_populates="ticket", cascade="all, delete-orphan")
+    chat_messages = relationship("TicketChat", back_populates="ticket", cascade="all, delete-orphan")

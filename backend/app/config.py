@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     DATABASE_URL: str = f"sqlite+aiosqlite:///{os.path.join(BASE_DIR, 'chamados.db')}"
     SECRET_KEY: str = "chamados-super-secret-key-change-in-production-32chars"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
+    REFRESH_TOKEN_EXPIRE_DAYS: int = 30
     GOOGLE_CLIENT_ID: str = ""
     GOOGLE_CLIENT_SECRET: str = ""
     SMTP_HOST: str = "smtp.gmail.com"

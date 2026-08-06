@@ -71,4 +71,4 @@ Consulte [COMO_RODAR.md](COMO_RODAR.md) para instrucoes detalhadas.
 
 ## Licenca
 
-Projeto interno para uso corporativo.
+Distribuido sob a licenca MIT. Veja [LICENSE](LICENSE) para detalhes.

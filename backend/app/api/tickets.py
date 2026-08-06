@@ -1,4 +1,5 @@
 import uuid
+from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
@@ -9,8 +10,17 @@ from app.schemas.ticket import (
 )
 from app.dependencies import get_current_user, require_admin, require_technician_or_admin
 from app.services import ticket_service
+from app.services.chat_service import send_chat_message, get_chat_notifications
 
 router = APIRouter()
+
+
+@router.get("/notifications")
+async def chat_notifications(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    return await get_chat_notifications(db, user)
 
 
 @router.post("", response_model=TicketResponse)
@@ -24,6 +34,19 @@ async def create_ticket(
     )
     await db.flush()
     await db.refresh(ticket, ["creator", "assignee", "sector"])
+
+    now = datetime.now(timezone.utc)
+    hora = now.strftime("%d/%m/%Y às %H:%M")
+    system_msg = (
+        f"Chamado #{ticket.ticket_number} aberto em {hora} por {user.name}.\n"
+        f"Titulo: {ticket.title}\n"
+        f"Setor: {ticket.sector.name if ticket.sector else 'N/A'}\n"
+        f"Categoria: {ticket.category or 'N/A'}\n"
+        f"Prioridade: {ticket.priority}"
+    )
+    await send_chat_message(db, ticket.id, user.id, system_msg, is_system=True)
+    await db.flush()
+
     return ticket
 
 

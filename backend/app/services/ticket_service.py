@@ -6,6 +6,7 @@ from sqlalchemy.orm import selectinload
 from app.models.ticket import Ticket, Sector
 from app.models.user import User
 from app.models.comment import TicketHistory
+from app.services.chat_service import delete_chat_messages
 
 SLA_HOURS = {
     "critical": 4,

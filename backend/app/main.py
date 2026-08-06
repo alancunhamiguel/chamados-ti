@@ -2,6 +2,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.api.router import api_router
+from app.api.ws_chat import router as ws_router
 from app.config import get_settings
 from app.database import init_db, async_session
 from app.models.user import User
@@ -65,6 +66,7 @@ app.add_middleware(
 )
 
 app.include_router(api_router)
+app.include_router(ws_router)
 
 
 @app.get("/health")
