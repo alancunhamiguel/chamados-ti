@@ -1,6 +1,6 @@
 # Sistema de Chamados TI
 
-Sistema web completo para gestao de chamados de TI (helpdesk) permitindo que colaboradores abram chamados e que a equipe tecnica gerencie, priorize e resolva-os.
+Sistema web completo para gestão de chamados de TI (helpdesk) permitindo que colaboradores abram chamados e que a equipe tecnica gerencie, priorize e resolva-os.
 
 ## Funcionalidades
 
