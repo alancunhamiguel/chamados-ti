@@ -34,19 +34,6 @@ class CommentResponse(BaseModel):
 CommentResponse.model_rebuild()
 
 
-class AttachmentResponse(BaseModel):
-    id: uuid.UUID
-    ticket_id: uuid.UUID
-    original_filename: str
-    file_size: int
-    mime_type: str | None = None
-    uploaded_by: uuid.UUID
-    created_at: datetime
-
-    class Config:
-        from_attributes = True
-
-
 class HistoryResponse(BaseModel):
     id: uuid.UUID
     ticket_id: uuid.UUID
@@ -70,24 +57,3 @@ class DashboardStats(BaseModel):
     closed_tickets: int
     avg_resolution_hours: float | None = None
     sla_breach_count: int
-
-
-class StatusCount(BaseModel):
-    status: str
-    count: int
-
-
-class PriorityCount(BaseModel):
-    priority: str
-    count: int
-
-
-class SectorCount(BaseModel):
-    sector: str
-    count: int
-
-
-class TechnicianCount(BaseModel):
-    technician_name: str
-    technician_id: uuid.UUID
-    count: int

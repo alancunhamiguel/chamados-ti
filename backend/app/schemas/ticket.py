@@ -1,6 +1,7 @@
 import uuid
 from datetime import datetime
 from pydantic import BaseModel
+from app.models.enums import TicketStatus, TicketPriority
 
 
 class TicketCreate(BaseModel):
@@ -8,7 +9,7 @@ class TicketCreate(BaseModel):
     description: str
     sector_id: uuid.UUID
     category: str | None = None
-    priority: str = "medium"
+    priority: TicketPriority = TicketPriority.MEDIUM
 
 
 class TicketUpdate(BaseModel):
@@ -18,26 +19,15 @@ class TicketUpdate(BaseModel):
 
 
 class TicketStatusUpdate(BaseModel):
-    status: str
+    status: TicketStatus
 
 
 class TicketPriorityUpdate(BaseModel):
-    priority: str
+    priority: TicketPriority
 
 
 class TicketAssign(BaseModel):
     assigned_to: uuid.UUID
-
-
-class TicketFilter(BaseModel):
-    status: str | None = None
-    priority: str | None = None
-    sector_id: uuid.UUID | None = None
-    category: str | None = None
-    assigned_to: uuid.UUID | None = None
-    search: str | None = None
-    page: int = 1
-    per_page: int = 20
 
 
 class UserBrief(BaseModel):
@@ -63,8 +53,8 @@ class TicketResponse(BaseModel):
     ticket_number: int
     title: str
     description: str
-    status: str
-    priority: str
+    status: TicketStatus
+    priority: TicketPriority
     sector_id: uuid.UUID
     category: str | None = None
     created_by: uuid.UUID

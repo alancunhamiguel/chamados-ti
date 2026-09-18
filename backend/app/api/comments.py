@@ -6,8 +6,10 @@ from sqlalchemy.orm import selectinload
 from app.database import get_db
 from app.models.user import User
 from app.models.comment import TicketComment, TicketHistory
+from app.models.ticket import Ticket
 from app.schemas.comment import CommentCreate, CommentResponse
-from app.dependencies import get_current_user
+from app.dependencies import get_current_user, ensure_ticket_access
+from app.services.email_service import notify_comment
 
 router = APIRouter()
 
@@ -18,6 +20,12 @@ async def list_comments(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
+    result = await db.execute(select(Ticket).where(Ticket.id == ticket_id))
+    ticket_obj = result.scalar_one_or_none()
+    if not ticket_obj:
+        raise HTTPException(status_code=404, detail="Chamado nao encontrado")
+    ensure_ticket_access(user, ticket_obj)
+
     query = select(TicketComment).options(selectinload(TicketComment.user)).where(
         TicketComment.ticket_id == ticket_id
     )
@@ -48,6 +56,15 @@ async def add_comment(
     if data.is_internal and user.role not in ["technician", "admin"]:
         raise HTTPException(status_code=403, detail="So tecnicos e admins podem criar comentarios internos")
 
+    result = await db.execute(
+        select(Ticket)
+        .options(selectinload(Ticket.creator), selectinload(Ticket.assignee))
+        .where(Ticket.id == ticket_id)
+    )
+    ticket = result.scalar_one_or_none()
+    if not ticket:
+        raise HTTPException(status_code=404, detail="Chamado nao encontrado")
+
     comment = TicketComment(
         ticket_id=ticket_id,
         user_id=user.id,
@@ -66,6 +83,8 @@ async def add_comment(
 
     await db.flush()
     await db.refresh(comment, ["user"])
+
+    await notify_comment(ticket, user, data.message, data.is_internal)
 
     resp = CommentResponse.model_validate(comment)
     resp.user = {"id": user.id, "name": user.name, "email": user.email, "role": user.role}

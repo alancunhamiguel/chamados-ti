@@ -1,6 +1,7 @@
 import uuid
 from datetime import datetime
 from pydantic import BaseModel, EmailStr
+from app.models.enums import UserRole, OnlineStatus
 
 
 class UserCreate(BaseModel):
@@ -8,14 +9,14 @@ class UserCreate(BaseModel):
     email: str
     password: str
     sector: str
-    role: str = "employee"
+    role: UserRole = UserRole.EMPLOYEE
 
 
 class UserUpdate(BaseModel):
     name: str | None = None
     email: str | None = None
     sector: str | None = None
-    role: str | None = None
+    role: UserRole | None = None
     is_active: bool | None = None
 
 
@@ -28,11 +29,11 @@ class UserResponse(BaseModel):
     id: uuid.UUID
     name: str
     email: str
-    role: str
+    role: UserRole
     sector: str
     avatar_url: str | None = None
     is_active: bool
-    online_status: str = "offline"
+    online_status: OnlineStatus = OnlineStatus.OFFLINE
     created_at: datetime
 
     class Config:

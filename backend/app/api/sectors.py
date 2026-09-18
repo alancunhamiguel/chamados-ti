@@ -5,7 +5,7 @@ from pydantic import BaseModel
 from app.database import get_db
 from app.models.ticket import Sector
 from app.schemas.ticket import SectorResponse
-from app.dependencies import require_admin
+from app.dependencies import require_admin, get_current_user
 
 router = APIRouter()
 
@@ -22,7 +22,7 @@ class SectorUpdate(BaseModel):
 
 
 @router.get("", response_model=list[SectorResponse])
-async def list_sectors(db: AsyncSession = Depends(get_db)):
+async def list_sectors(db: AsyncSession = Depends(get_db), user=Depends(get_current_user)):
     result = await db.execute(select(Sector).where(Sector.is_active == True).order_by(Sector.name))
     return result.scalars().all()
 

@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
-import { getDashboardStats, getByStatus, getByPriority, getByTechnician, getSlaCompliance } from '../api/dashboard';
+import { getDashboardStats, getByStatus, getByPriority, getBySector, getByTechnician, getSlaCompliance } from '../api/dashboard';
 
 const COLORS = ['#0066FF', '#F59E0B', '#10B981', '#EF4444', '#94A3B8'];
 
@@ -23,6 +23,7 @@ export default function Dashboard() {
   const { data: stats } = useQuery({ queryKey: ['dashboard-stats'], queryFn: getDashboardStats });
   const { data: statusData } = useQuery({ queryKey: ['dashboard-status'], queryFn: getByStatus });
   const { data: priorityData } = useQuery({ queryKey: ['dashboard-priority'], queryFn: getByPriority });
+  const { data: sectorData } = useQuery({ queryKey: ['dashboard-sector'], queryFn: getBySector });
   const { data: techData } = useQuery({ queryKey: ['dashboard-tech'], queryFn: getByTechnician });
   const { data: slaData } = useQuery({ queryKey: ['dashboard-sla'], queryFn: getSlaCompliance });
 
@@ -37,7 +38,7 @@ export default function Dashboard() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-6 gap-4 mb-8">
         <div className="bg-white rounded-card shadow-card p-5">
           <div className="flex items-center gap-3 mb-2">
             <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center">
@@ -82,10 +83,34 @@ export default function Dashboard() {
           <p className="text-2xl font-bold text-emerald-500">{stats?.resolved_tickets || 0}</p>
           <p className="text-xs text-slate-400 font-medium mt-1">Resolvidos</p>
         </div>
+        <div className="bg-white rounded-card shadow-card p-5">
+          <div className="flex items-center gap-3 mb-2">
+            <div className="w-10 h-10 rounded-xl bg-purple-50 flex items-center justify-center">
+              <svg className="w-5 h-5 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+          </div>
+          <p className="text-2xl font-bold text-purple-500">
+            {stats?.avg_resolution_hours ? `${stats.avg_resolution_hours}h` : '-'}
+          </p>
+          <p className="text-xs text-slate-400 font-medium mt-1">Tempo Medio</p>
+        </div>
+        <div className="bg-white rounded-card shadow-card p-5">
+          <div className="flex items-center gap-3 mb-2">
+            <div className="w-10 h-10 rounded-xl bg-red-50 flex items-center justify-center">
+              <svg className="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
+              </svg>
+            </div>
+          </div>
+          <p className="text-2xl font-bold text-red-500">{stats?.sla_breach_count || 0}</p>
+          <p className="text-xs text-slate-400 font-medium mt-1">Violacoes SLA</p>
+        </div>
       </div>
 
       {/* Charts Row */}
-      <div className="grid grid-cols-2 gap-5 mb-8">
+      <div className="grid grid-cols-3 gap-5 mb-8">
         <div className="bg-white rounded-card shadow-card p-5">
           <h3 className="text-sm font-semibold text-slate-600 uppercase tracking-wide mb-4">Por Status</h3>
           <ResponsiveContainer width="100%" height={250}>
@@ -123,6 +148,21 @@ export default function Dashboard() {
               />
               <Legend />
             </PieChart>
+          </ResponsiveContainer>
+        </div>
+
+        <div className="bg-white rounded-card shadow-card p-5">
+          <h3 className="text-sm font-semibold text-slate-600 uppercase tracking-wide mb-4">Por Departamento</h3>
+          <ResponsiveContainer width="100%" height={250}>
+            <BarChart data={sectorData || []} layout="vertical">
+              <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" />
+              <XAxis type="number" tick={{ fontSize: 12, fill: '#64748B' }} />
+              <YAxis dataKey="sector_name" type="category" width={100} tick={{ fontSize: 12, fill: '#64748B' }} />
+              <Tooltip
+                contentStyle={{ borderRadius: '12px', border: '1px solid #E2E8F0', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}
+              />
+              <Bar dataKey="count" fill="#10B981" radius={[0, 6, 6, 0]} />
+            </BarChart>
           </ResponsiveContainer>
         </div>
       </div>

@@ -15,12 +15,32 @@ SLA_HOURS = {
     "low": 72,
 }
 
-VALID_STATUS_TRANSITIONS = {
+# Transitions allowed for staff (technician/admin) via the status endpoint.
+# "resolved -> in_progress" means REOPENING a resolved ticket; "resolved -> closed"
+# is the staff override to close once the work is done.
+STAFF_TRANSITIONS = {
     "open": ["in_progress"],
     "in_progress": ["waiting", "resolved"],
     "waiting": ["in_progress"],
+    "resolved": ["in_progress", "closed"],
+    "closed": [],
+}
+
+# Transitions allowed for the ticket creator (employee) in the
+# confirmation/closing flow: they confirm the solution (-> closed) or
+# return/devolution the solution (-> in_progress) when it did not solve
+# the problem.
+CREATOR_TRANSITIONS = {
     "resolved": ["closed", "in_progress"],
     "closed": [],
+}
+
+STATUS_LABELS = {
+    "open": "Aberto",
+    "in_progress": "Em andamento",
+    "waiting": "Aguardando",
+    "resolved": "Resolvido",
+    "closed": "Encerrado",
 }
 
 
@@ -39,6 +59,24 @@ async def log_action(db: AsyncSession, ticket_id: uuid.UUID, user_id: uuid.UUID,
         description=description,
     )
     db.add(history)
+
+
+def can_transition(user: User, ticket: Ticket, new_status: str) -> bool:
+    """Central permission matrix for status transitions.
+
+    - Staff (technician/admin) follow STAFF_TRANSITIONS.
+    - The ticket creator follows CREATOR_TRANSITIONS (confirmation flow).
+    - A user is allowed if any applicable rule permits the transition.
+    """
+    current = ticket.status
+    is_staff = user.role in ("technician", "admin")
+    is_creator = ticket.created_by == user.id
+
+    if is_creator and new_status in CREATOR_TRANSITIONS.get(current, []):
+        return True
+    if is_staff and new_status in STAFF_TRANSITIONS.get(current, []):
+        return True
+    return False
 
 
 async def create_ticket(db: AsyncSession, user_id: uuid.UUID, title: str, description: str, sector_id: uuid.UUID, category: str | None = None, priority: str = "medium") -> Ticket:
@@ -113,13 +151,9 @@ async def list_tickets(db: AsyncSession, user: User, status: str | None = None, 
     }
 
 
-async def update_ticket_status(db: AsyncSession, ticket_id: uuid.UUID, user_id: uuid.UUID, new_status: str) -> Ticket | None:
-    ticket = await get_ticket(db, ticket_id)
-    if not ticket:
-        return None
-
-    valid_transitions = VALID_STATUS_TRANSITIONS.get(ticket.status, [])
-    if new_status not in valid_transitions:
+async def update_ticket_status(db: AsyncSession, ticket: Ticket, user: User, new_status: str) -> Ticket | None:
+    """Change ticket status honoring the role-aware state machine."""
+    if not can_transition(user, ticket, new_status):
         raise ValueError(f"Transicao invalida: {ticket.status} -> {new_status}")
 
     old_status = ticket.status
@@ -131,16 +165,19 @@ async def update_ticket_status(db: AsyncSession, ticket_id: uuid.UUID, user_id: 
         ticket.resolved_at = now
     elif new_status == "closed":
         ticket.closed_at = now
+        ticket.resolved_at = ticket.resolved_at or now
+    elif new_status == "in_progress" and old_status == "resolved":
+        ticket.resolved_at = None
 
-    await log_action(db, ticket.id, user_id, "status_changed", old_value=old_status, new_value=new_status)
+    await log_action(
+        db, ticket.id, user.id, "status_changed",
+        old_value=old_status, new_value=new_status,
+        description=f"Status alterado de {STATUS_LABELS.get(old_status, old_status)} para {STATUS_LABELS.get(new_status, new_status)}",
+    )
     return ticket
 
 
-async def update_ticket_priority(db: AsyncSession, ticket_id: uuid.UUID, user_id: uuid.UUID, new_priority: str) -> Ticket | None:
-    ticket = await get_ticket(db, ticket_id)
-    if not ticket:
-        return None
-
+async def update_ticket_priority(db: AsyncSession, ticket: Ticket, user_id: uuid.UUID, new_priority: str) -> Ticket | None:
     old_priority = ticket.priority
     ticket.priority = new_priority
     ticket.sla_deadline = calculate_sla_deadline(new_priority, ticket.created_at)
@@ -150,27 +187,16 @@ async def update_ticket_priority(db: AsyncSession, ticket_id: uuid.UUID, user_id
     return ticket
 
 
-async def assign_ticket(db: AsyncSession, ticket_id: uuid.UUID, technician_id: uuid.UUID, admin_id: uuid.UUID) -> Ticket | None:
-    ticket = await get_ticket(db, ticket_id)
-    if not ticket:
-        return None
-
+async def assign_ticket(db: AsyncSession, ticket: Ticket, technician_id: uuid.UUID, assigner_id: uuid.UUID) -> Ticket | None:
     ticket.assigned_to = technician_id
-    ticket.status = "in_progress"
+    if ticket.status == "open":
+        ticket.status = "in_progress"
+        await log_action(
+            db, ticket.id, assigner_id, "status_changed",
+            old_value="open", new_value="in_progress",
+            description="Status alterado de Aberto para Em andamento",
+        )
     ticket.updated_at = datetime.now(timezone.utc)
 
-    await log_action(db, ticket.id, admin_id, "assigned", new_value=str(technician_id))
-    return ticket
-
-
-async def close_ticket(db: AsyncSession, ticket_id: uuid.UUID, user_id: uuid.UUID) -> Ticket | None:
-    ticket = await get_ticket(db, ticket_id)
-    if not ticket:
-        return None
-
-    ticket.status = "closed"
-    ticket.closed_at = datetime.now(timezone.utc)
-    ticket.updated_at = datetime.now(timezone.utc)
-
-    await log_action(db, ticket.id, user_id, "closed", new_value="closed")
+    await log_action(db, ticket.id, assigner_id, "assigned", old_value=None, new_value=str(technician_id))
     return ticket

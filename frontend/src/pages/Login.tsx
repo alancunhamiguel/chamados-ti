@@ -1,14 +1,61 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+
+declare global {
+  interface Window {
+    google?: any;
+  }
+}
+
+const googleClientId = (import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined) || '';
 
 export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [googleError, setGoogleError] = useState('');
   const [loading, setLoading] = useState(false);
-  const { login } = useAuth();
+  const { login, loginWithGoogle } = useAuth();
   const navigate = useNavigate();
+
+  const navigateRef = useRef(navigate);
+  navigateRef.current = navigate;
+  const loginGoogleRef = useRef(loginWithGoogle);
+  loginGoogleRef.current = loginWithGoogle;
+
+  useEffect(() => {
+    if (!googleClientId) return;
+
+    const initGoogle = () => {
+      if (!window.google?.accounts) {
+        setTimeout(initGoogle, 300);
+        return;
+      }
+      window.google.accounts.id.initialize({
+        client_id: googleClientId,
+        auto_select: false,
+        callback: async (response: any) => {
+          setError('');
+          setGoogleError('');
+          setLoading(true);
+          try {
+            await loginGoogleRef.current(response.credential);
+            navigateRef.current('/tickets');
+          } catch {
+            setGoogleError('Falha ao entrar com o Google');
+          } finally {
+            setLoading(false);
+          }
+        },
+      });
+      window.google.accounts.id.renderButton(
+        document.getElementById('google-signin-button')!,
+        { theme: 'outline', size: 'large', width: 320, text: 'continue_with', shape: 'rectangular' }
+      );
+    };
+    initGoogle();
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -30,12 +77,10 @@ export default function Login() {
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="text-center mb-8">
-          <div className="w-16 h-16 bg-primary-500 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg shadow-primary-500/20">
-            <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-            </svg>
+          <div className="w-24 h-16 bg-white rounded-2xl flex items-center justify-center mx-auto mb-4 p-2 shadow-card">
+            <img src="/logo.png" alt="Grupo FedCorp" className="max-w-full max-h-full object-contain" />
           </div>
-          <h1 className="text-2xl font-bold text-slate-800" style={{ fontFamily: 'Inter, sans-serif' }}>Chamados TI</h1>
+          <h1 className="text-2xl font-bold text-slate-800" style={{ fontFamily: 'Inter, sans-serif' }}>Grupo FedCorp</h1>
           <p className="text-sm text-slate-400 mt-1">Sistema de Gerenciamento de Chamados</p>
         </div>
 
@@ -81,11 +126,22 @@ export default function Login() {
               {loading ? 'Entrando...' : 'Entrar'}
             </button>
           </form>
-          <div className="mt-5 pt-5 border-t border-surface-200 text-center">
-            <button className="text-sm text-slate-400 hover:text-primary-500 transition-colors font-medium">
-              Entrar com Google
-            </button>
-          </div>
+
+          {googleClientId && (
+            <div className="mt-6">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="flex-1 h-px bg-surface-200"></div>
+                <span className="text-xs text-slate-400 uppercase tracking-wide">ou</span>
+                <div className="flex-1 h-px bg-surface-200"></div>
+              </div>
+              {googleError && (
+                <div className="bg-red-50 text-red-600 text-sm px-4 py-3 rounded-lg mb-4 border border-red-100">
+                  {googleError}
+                </div>
+              )}
+              <div id="google-signin-button" className="flex justify-center"></div>
+            </div>
+          )}
         </div>
       </div>
     </div>

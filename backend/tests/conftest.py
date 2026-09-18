@@ -1,3 +1,10 @@
+import os
+
+# Mantem os testes hermetidos: desativa SMTP real mesmo com .env configurado,
+# fazendo os emails irem para o fallback de log (backend/logs/emails.log).
+os.environ["SMTP_USER"] = ""
+os.environ["SMTP_PASS"] = ""
+
 import pytest
 import pytest_asyncio
 from httpx import AsyncClient, ASGITransport

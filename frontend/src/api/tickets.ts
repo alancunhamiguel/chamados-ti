@@ -16,8 +16,16 @@ export const createTicket = async (data: {
   sector_id: string;
   category?: string;
   priority?: string;
+  files?: File[];
 }) => {
-  const response = await api.post('/tickets', data);
+  const formData = new FormData();
+  formData.append('title', data.title);
+  formData.append('description', data.description);
+  formData.append('sector_id', data.sector_id);
+  if (data.category) formData.append('category', data.category);
+  if (data.priority) formData.append('priority', data.priority);
+  (data.files || []).forEach((file) => formData.append('files', file));
+  const response = await api.post('/tickets', formData);
   return response.data;
 };
 
@@ -33,10 +41,5 @@ export const updateTicketPriority = async (id: string, priority: string) => {
 
 export const assignTicket = async (id: string, assigned_to: string) => {
   const response = await api.put(`/tickets/${id}/assign`, { assigned_to });
-  return response.data;
-};
-
-export const closeTicket = async (id: string) => {
-  const response = await api.put(`/tickets/${id}/close`);
   return response.data;
 };

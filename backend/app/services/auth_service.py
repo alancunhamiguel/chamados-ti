@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta, timezone
+import httpx
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 from sqlalchemy import select
@@ -10,6 +11,24 @@ settings = get_settings()
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 ALGORITHM = "HS256"
+
+
+async def verify_google_token(token: str, client_id: str) -> dict | None:
+    """Verifica um ID token do Google Gate (GSi) e retorna o payload, ou None."""
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.get(
+                "https://oauth2.googleapis.com/tokeninfo",
+                params={"id_token": token},
+            )
+            resp.raise_for_status()
+            info = resp.json()
+    except Exception:
+        return None
+
+    if not isinstance(info, dict) or info.get("aud") != client_id:
+        return None
+    return info
 
 
 def hash_password(password: str) -> str:

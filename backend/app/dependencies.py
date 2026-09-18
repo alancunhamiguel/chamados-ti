@@ -38,3 +38,9 @@ def require_role(roles: list[str]):
 
 require_admin = require_role(["admin"])
 require_technician_or_admin = require_role(["technician", "admin"])
+
+
+def ensure_ticket_access(user: User, ticket) -> None:
+    """Employees may only access their own tickets; staff see everything."""
+    if user.role == "employee" and ticket.created_by != user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Sem permissao")

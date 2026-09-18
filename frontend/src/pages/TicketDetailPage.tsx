@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getTicket, updateTicketStatus, updateTicketPriority, closeTicket, assignTicket } from '../api/tickets';
+import { getTicket, updateTicketStatus, updateTicketPriority, assignTicket } from '../api/tickets';
 import { getComments, addComment, getHistory } from '../api/comments';
-import { getAttachments, uploadAttachment, deleteAttachment } from '../api/attachments';
+import { getAttachments, uploadAttachment, deleteAttachment, downloadAttachment } from '../api/attachments';
 import { useAuth } from '../contexts/AuthContext';
 import { useChat } from '../contexts/ChatContext';
 import { useToast } from '../contexts/ToastContext';
@@ -14,7 +14,7 @@ const statusLabels: Record<string, string> = {
   in_progress: 'Em Andamento',
   waiting: 'Aguardando',
   resolved: 'Resolvido',
-  closed: 'Fechado',
+  closed: 'Encerrado',
 };
 
 const priorityLabels: Record<string, string> = {
@@ -45,6 +45,14 @@ const priorityBadgeColors: Record<string, string> = {
   medium: 'bg-blue-50 text-blue-600',
   high: 'bg-orange-50 text-orange-600',
   critical: 'bg-red-50 text-red-600',
+};
+
+const STAFF_STATUS_OPTIONS: Record<string, string[]> = {
+  open: ['in_progress'],
+  in_progress: ['waiting', 'resolved'],
+  waiting: ['in_progress'],
+  resolved: ['in_progress'],
+  closed: [],
 };
 
 function getSlaStatus(slaDeadline: string | undefined, status: string): { color: string; label: string } {
@@ -104,7 +112,7 @@ export default function TicketDetailPage() {
       const res = await api.get('/users/technicians');
       return res.data;
     },
-    enabled: hasRole('admin'),
+    enabled: hasRole(['admin', 'technician']),
   });
 
   const { data: attachments } = useQuery({
@@ -166,13 +174,13 @@ export default function TicketDetailPage() {
   });
 
   const closeMutation = useMutation({
-    mutationFn: () => closeTicket(id!),
+    mutationFn: () => updateTicketStatus(id!, 'closed'),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['ticket', id] });
       setShowCloseConfirm(false);
-      addToast('success', 'Chamado fechado com sucesso!');
+      addToast('success', 'Chamado encerrado com sucesso!');
     },
-    onError: () => addToast('error', 'Erro ao fechar chamado.'),
+    onError: () => addToast('error', 'Erro ao encerrar chamado.'),
   });
 
   const assignMutation = useMutation({
@@ -370,11 +378,10 @@ export default function TicketDetailPage() {
               disabled={statusMutation.isPending}
               className="px-4 py-2.5 border border-surface-200 rounded-lg text-sm text-slate-600 focus:outline-none focus:ring-2 focus:ring-primary-500 disabled:opacity-50"
             >
-              <option value="open">Aberto</option>
-              <option value="in_progress">Em Andamento</option>
-              <option value="waiting">Aguardando</option>
-              <option value="resolved">Resolvido</option>
-              <option value="closed">Fechado</option>
+              <option value={ticket.status} disabled>{statusLabels[ticket.status]}</option>
+              {(STAFF_STATUS_OPTIONS[ticket.status] || []).map((s) => (
+                <option key={s} value={s}>{statusLabels[s]}</option>
+              ))}
             </select>
             <select
               value={ticket.priority}
@@ -387,7 +394,7 @@ export default function TicketDetailPage() {
               <option value="high">Alta</option>
               <option value="critical">Critica</option>
             </select>
-            {hasRole('admin') && technicians && (
+            {(hasRole('admin') || hasRole('technician')) && technicians && ticket.status !== 'closed' && (
               <select
                 value={ticket.assigned_to || ''}
                 onChange={(e) => e.target.value && assignMutation.mutate(e.target.value)}
@@ -405,7 +412,7 @@ export default function TicketDetailPage() {
       )}
 
       {/* Action Buttons */}
-      <div className="flex justify-between items-center mb-5">
+      <div className="flex flex-wrap justify-between items-center gap-3 mb-5">
         <button
           onClick={() => {
             if (ticketChatOpen) {
@@ -425,14 +432,35 @@ export default function TicketDetailPage() {
           </svg>
           {(ticketChatOpen) ? 'Fechar Chat' : 'Abrir Chat'}
         </button>
-        {ticket.status !== 'closed' && (
-          <button
-            onClick={() => setShowCloseConfirm(true)}
-            className="bg-red-50 text-red-600 border border-red-200 px-4 py-2.5 rounded-lg text-sm font-semibold hover:bg-red-100 transition-all"
-          >
-            Fechar Chamado
-          </button>
-        )}
+
+        <div className="flex gap-2 flex-wrap">
+          {ticket.status === 'resolved' && isOwner && (
+            <>
+              <button
+                onClick={() => statusMutation.mutate('closed')}
+                disabled={statusMutation.isPending}
+                className="bg-emerald-500 text-white px-4 py-2.5 rounded-lg text-sm font-semibold hover:bg-emerald-600 disabled:opacity-50 transition-all shadow-sm"
+              >
+                Confirmar Solucao
+              </button>
+              <button
+                onClick={() => statusMutation.mutate('in_progress')}
+                disabled={statusMutation.isPending}
+                className="bg-amber-500 text-white px-4 py-2.5 rounded-lg text-sm font-semibold hover:bg-amber-600 disabled:opacity-50 transition-all shadow-sm"
+              >
+                Devolver / Nao resolvido
+              </button>
+            </>
+          )}
+          {ticket.status !== 'closed' && (hasRole('technician') || hasRole('admin')) && (
+            <button
+              onClick={() => setShowCloseConfirm(true)}
+              className="bg-red-50 text-red-600 border border-red-200 px-4 py-2.5 rounded-lg text-sm font-semibold hover:bg-red-100 transition-all"
+            >
+              Encerrar Chamado
+            </button>
+          )}
+        </div>
       </div>
 
       {/* History */}
@@ -550,12 +578,25 @@ export default function TicketDetailPage() {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
                     </svg>
                   </div>
-                  <div>
-                    <p className="text-sm font-medium text-slate-700">{a.original_filename}</p>
+                  <button
+                    onClick={() => downloadAttachment(id!, a.id, a.original_filename)}
+                    className="text-left hover:text-primary-600"
+                  >
+                    <p className="text-sm font-medium text-slate-700 group-hover:text-primary-600">{a.original_filename}</p>
                     <p className="text-[10px] text-slate-400">{formatFileSize(a.file_size)} · {a.uploader_name} · {new Date(a.created_at).toLocaleString('pt-BR')}</p>
-                  </div>
+                  </button>
                 </div>
-                {(isOwner || hasRole('technician') || hasRole('admin')) && (
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => downloadAttachment(id!, a.id, a.original_filename)}
+                    title="Baixar"
+                    className="text-slate-400 hover:text-primary-500 p-1.5 rounded-lg hover:bg-primary-50 transition-all"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0L8 12m4 4V4" />
+                    </svg>
+                  </button>
+                  {(isOwner || hasRole('technician') || hasRole('admin')) && (
                   <button
                     onClick={() => {
                       if (confirm(`Remover "${a.original_filename}"?`)) {
@@ -568,7 +609,8 @@ export default function TicketDetailPage() {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                     </svg>
                   </button>
-                )}
+                  )}
+                </div>
               </div>
             ))}
           </div>
@@ -588,12 +630,12 @@ export default function TicketDetailPage() {
                 </svg>
               </div>
               <div>
-                <h2 className="text-lg font-bold text-slate-800">Fechar Chamado</h2>
+                <h2 className="text-lg font-bold text-slate-800">Encerrar Chamado</h2>
                 <p className="text-sm text-slate-400">Tem certeza?</p>
               </div>
             </div>
             <p className="text-sm text-slate-600 mb-5">
-              Esta acao ira fechar o chamado <span className="font-semibold">#{ticket.ticket_number}</span>. O historico sera preservado.
+              Esta acao ira encerrar o chamado <span className="font-semibold">#{ticket.ticket_number}</span>. O historico sera preservado.
             </p>
             <div className="flex gap-3 justify-end">
               <button

@@ -20,8 +20,19 @@ interface ChatPopupProps {
   stackIndex?: number;
 }
 
+function buildWsUrl(ticketId: string): string {
+  const base = (import.meta.env.VITE_API_URL || '/api').replace(/\/?api\/?$/, '').replace(/\/$/, '');
+  const proto = window.location.protocol === 'https:' ? 'wss' : 'ws';
+  const token = localStorage.getItem('token');
+  if (base) {
+    return `${proto}://${base.replace(/^https?:\/\//, '')}/ws/chat/${ticketId}?token=${encodeURIComponent(token || '')}`;
+  }
+  return `${proto}://${window.location.host}/ws/chat/${ticketId}?token=${encodeURIComponent(token || '')}`;
+}
+
 export default function ChatPopup({ ticketId, ticketNumber, isOpen, onOpen, onClose, stackIndex = 0 }: ChatPopupProps) {
   const { user } = useAuth();
+  const authToken = localStorage.getItem('token');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [sending, setSending] = useState(false);
@@ -29,6 +40,8 @@ export default function ChatPopup({ ticketId, ticketNumber, isOpen, onOpen, onCl
   const [isMinimized, setIsMinimized] = useState(false);
   const lastCountRef = useRef(0);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const wsRef = useRef<WebSocket | null>(null);
+  const wsFallbackRef = useRef(true);
   const [notification, setNotification] = useState<ChatMessage | null>(null);
   const [hasNewMessages, setHasNewMessages] = useState(false);
   const notificationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -38,47 +51,127 @@ export default function ChatPopup({ ticketId, ticketNumber, isOpen, onOpen, onCl
   const userIdRef = useRef(user?.id);
   const onOpenRef = useRef(onOpen);
   const ticketNumberRef = useRef(ticketNumber);
+  const messagesRef = useRef<ChatMessage[]>([]);
 
   useEffect(() => { isOpenRef.current = isOpen; }, [isOpen]);
   useEffect(() => { isMinimizedRef.current = isMinimized; }, [isMinimized]);
   useEffect(() => { userIdRef.current = user?.id; }, [user?.id]);
   useEffect(() => { onOpenRef.current = onOpen; }, [onOpen]);
   useEffect(() => { ticketNumberRef.current = ticketNumber; }, [ticketNumber]);
+  useEffect(() => { messagesRef.current = messages; }, [messages]);
 
+  const handleIncoming = (msg: ChatMessage) => {
+    setMessages((prev) => {
+      if (prev.some((m) => m.id === msg.id)) return prev;
+      return [...prev, msg];
+    });
+  };
+
+  const notifyIfAway = (msg: ChatMessage) => {
+    if (msg.sender_id === userIdRef.current) return;
+    if (!isOpenRef.current) {
+      onOpenRef.current();
+      setIsMinimized(false);
+    } else if (isMinimizedRef.current) {
+      setNotification(msg);
+      setHasNewMessages(true);
+      if (notificationTimerRef.current) clearTimeout(notificationTimerRef.current);
+      notificationTimerRef.current = setTimeout(() => setNotification(null), 5000);
+    }
+  };
+
+  // Load initial history
   useEffect(() => {
-    const poll = async () => {
-      try {
-        const { data } = await api.get(`/tickets/${ticketId}/chat`);
-        const prevCount = lastCountRef.current;
-
-        if (data.length > prevCount && prevCount > 0) {
-          const newMsg = data[data.length - 1];
-          if (newMsg.sender_id !== userIdRef.current) {
-            if (!isOpenRef.current) {
-              onOpenRef.current();
-              setIsMinimized(false);
-            } else if (isMinimizedRef.current) {
-              setNotification(newMsg);
-              setHasNewMessages(true);
-              if (notificationTimerRef.current) clearTimeout(notificationTimerRef.current);
-              notificationTimerRef.current = setTimeout(() => setNotification(null), 5000);
-            }
-          }
-        }
-
-        lastCountRef.current = data.length;
+    api.get(`/tickets/${ticketId}/chat`)
+      .then(({ data }) => {
         setMessages(data);
-      } catch {}
+        lastCountRef.current = data.length;
+      })
+      .catch(() => {});
+  }, [ticketId]);
+
+  // WebSocket real-time channel with polling fallback
+  useEffect(() => {
+    const token = authToken;
+
+    const connect = () => {
+      try {
+        const ws = new WebSocket(buildWsUrl(ticketId));
+        wsRef.current = ws;
+
+        ws.onopen = () => {
+          wsFallbackRef.current = false;
+          if (pollRef.current) {
+            clearInterval(pollRef.current);
+            pollRef.current = null;
+          }
+        };
+
+        ws.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            if (data.type === 'message') {
+              const msg: ChatMessage = data;
+              handleIncoming(msg);
+              notifyIfAway(msg);
+            }
+          } catch {}
+        };
+
+        ws.onclose = () => {
+          wsFallbackRef.current = true;
+          startPolling();
+        };
+
+        ws.onerror = () => {
+          wsFallbackRef.current = true;
+          startPolling();
+        };
+      } catch {
+        wsFallbackRef.current = true;
+        startPolling();
+      }
     };
 
-    poll();
-    pollRef.current = setInterval(poll, 2000);
+    const startPolling = () => {
+      if (pollRef.current) return;
+      pollRef.current = setInterval(async () => {
+        try {
+          const { data } = await api.get(`/tickets/${ticketId}/chat`);
+          const prevCount = lastCountRef.current;
+          if (data.length > prevCount && prevCount > 0) {
+            const newMsg = data[data.length - 1];
+            if (newMsg.sender_id !== userIdRef.current) {
+              if (!isOpenRef.current) {
+                onOpenRef.current();
+                setIsMinimized(false);
+              } else if (isMinimizedRef.current) {
+                setNotification(newMsg);
+                setHasNewMessages(true);
+                if (notificationTimerRef.current) clearTimeout(notificationTimerRef.current);
+                notificationTimerRef.current = setTimeout(() => setNotification(null), 5000);
+              }
+            }
+          }
+          lastCountRef.current = data.length;
+          setMessages(data);
+        } catch {}
+      }, 3000);
+    };
+
+    if (token) {
+      connect();
+    } else {
+      startPolling();
+    }
 
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);
+      if (wsRef.current) wsRef.current.close();
       if (notificationTimerRef.current) clearTimeout(notificationTimerRef.current);
     };
-  }, [ticketId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ticketId, authToken]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -100,7 +193,12 @@ export default function ChatPopup({ ticketId, ticketNumber, isOpen, onOpen, onCl
     setSending(true);
 
     try {
-      await api.post(`/tickets/${ticketId}/chat`, { message: msgText });
+      const ws = wsRef.current;
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'message', message: msgText }));
+      } else {
+        await api.post(`/tickets/${ticketId}/chat`, { message: msgText });
+      }
     } catch {
       setNewMessage(msgText);
     } finally {
@@ -186,8 +284,17 @@ export default function ChatPopup({ ticketId, ticketNumber, isOpen, onOpen, onCl
                 <div>
                   <p className="text-sm font-semibold">Chamado {ticketNumber ? `#${ticketNumber}` : ''}</p>
                   <div className="flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
-                    <span className="text-[10px] text-white/80">Online</span>
+                    {!wsFallbackRef.current ? (
+                      <>
+                        <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+                        <span className="text-[10px] text-white/80">Online</span>
+                      </>
+                    ) : (
+                      <>
+                        <span className="w-2 h-2 rounded-full bg-amber-300"></span>
+                        <span className="text-[10px] text-white/80">Atualizando...</span>
+                      </>
+                    )}
                   </div>
                 </div>
               </div>

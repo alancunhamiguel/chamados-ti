@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.models.user import User
 from app.schemas.user import UserResponse, UserUpdate
-from app.dependencies import require_admin, get_current_user
+from app.dependencies import require_admin, require_technician_or_admin, get_current_user
 
 router = APIRouter()
 
@@ -17,7 +17,7 @@ async def list_users(db: AsyncSession = Depends(get_db), admin: User = Depends(r
 
 
 @router.get("/technicians", response_model=list[UserResponse])
-async def list_technicians(db: AsyncSession = Depends(get_db), admin: User = Depends(require_admin)):
+async def list_technicians(db: AsyncSession = Depends(get_db), admin: User = Depends(require_technician_or_admin)):
     result = await db.execute(select(User).where(User.role.in_(["technician", "admin"]), User.is_active == True).order_by(User.name))
     return list(result.scalars().all())
 

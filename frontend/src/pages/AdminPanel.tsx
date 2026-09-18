@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, Fragment } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../api/client';
 import { useToast } from '../contexts/ToastContext';
@@ -20,8 +20,9 @@ export default function AdminPanel() {
   const [editingUser, setEditingUser] = useState<any>(null);
   const [editForm, setEditForm] = useState({ name: '', email: '', role: '', sector: '', is_active: true });
   const [editingSector, setEditingSector] = useState<any>(null);
-  const [sectorForm, setSectorForm] = useState({ name: '', description: '' });
+  const [sectorForm, setSectorForm] = useState({ name: '' });
   const [showNewSector, setShowNewSector] = useState(false);
+  const [expandedSector, setExpandedSector] = useState<string | null>(null);
   const { addToast } = useToast();
   const queryClient = useQueryClient();
 
@@ -64,7 +65,7 @@ export default function AdminPanel() {
       queryClient.invalidateQueries({ queryKey: ['sectors-all'] });
       queryClient.invalidateQueries({ queryKey: ['sectors'] });
       setShowNewSector(false);
-      setSectorForm({ name: '', description: '' });
+      setSectorForm({ name: '' });
       addToast('success', 'Setor criado!');
     },
     onError: () => addToast('error', 'Erro ao criar setor.'),
@@ -116,6 +117,15 @@ export default function AdminPanel() {
 
   const setField = (field: string, value: any) => {
     setEditForm((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const getSectorUsers = (sectorName: string) =>
+    (users || []).filter(
+      (u: any) => u.sector?.trim().toLowerCase() === sectorName.trim().toLowerCase()
+    );
+
+  const toggleSector = (sectorId: string) => {
+    setExpandedSector((prev) => (prev === sectorId ? null : sectorId));
   };
 
   return (
@@ -212,7 +222,7 @@ export default function AdminPanel() {
         <div>
           <div className="flex justify-end mb-4">
             <button
-              onClick={() => { setShowNewSector(true); setSectorForm({ name: '', description: '' }); }}
+              onClick={() => { setShowNewSector(true); setSectorForm({ name: '' }); }}
               className="bg-primary-500 text-white px-4 py-2.5 rounded-lg font-semibold text-sm hover:bg-primary-600 transition-all shadow-sm flex items-center gap-2"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -226,8 +236,8 @@ export default function AdminPanel() {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-surface-200">
-                  <th className="px-5 py-3.5 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">Nome</th>
-                  <th className="px-5 py-3.5 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">Descricao</th>
+                  <th className="px-5 py-3.5 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">Setor</th>
+                  <th className="px-5 py-3.5 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">Usuarios</th>
                   <th className="px-5 py-3.5 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">Status</th>
                   <th className="px-5 py-3.5 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">Acoes</th>
                 </tr>
@@ -249,44 +259,118 @@ export default function AdminPanel() {
                     </td>
                   </tr>
                 ) : (
-                  sectors?.map((sector: any) => (
-                    <tr key={sector.id} className="border-b border-surface-200/60 hover:bg-slate-50/50 transition-colors">
-                      <td className="px-5 py-3.5 font-medium text-sm text-slate-700">{sector.name}</td>
-                      <td className="px-5 py-3.5 text-sm text-slate-500">{sector.description || '-'}</td>
-                      <td className="px-5 py-3.5">
-                        <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${
-                          sector.is_active ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'
-                        }`}>
-                          {sector.is_active ? 'Ativo' : 'Inativo'}
-                        </span>
-                      </td>
-                      <td className="px-5 py-3.5">
-                        <div className="flex gap-1">
-                          <button
-                            onClick={() => {
-                              setEditingSector(sector);
-                              setSectorForm({ name: sector.name, description: sector.description || '' });
-                            }}
-                            className="text-primary-500 hover:text-primary-600 text-sm font-semibold hover:bg-primary-50 px-3 py-1.5 rounded-lg transition-all"
-                          >
-                            Editar
-                          </button>
-                          {sector.is_active && (
-                            <button
-                              onClick={() => {
-                                if (confirm(`Desativar setor "${sector.name}"?`)) {
-                                  deactivateSectorMutation.mutate(sector.id);
-                                }
-                              }}
-                              className="text-red-500 hover:text-red-600 text-sm font-semibold hover:bg-red-50 px-3 py-1.5 rounded-lg transition-all"
-                            >
-                              Desativar
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))
+                  sectors?.map((sector: any) => {
+                    const sectorUsers = getSectorUsers(sector.name);
+                    const isExpanded = expandedSector === sector.id;
+                    return (
+                      <Fragment key={sector.id}>
+                        <tr
+                          onClick={() => toggleSector(sector.id)}
+                          className={`border-b border-surface-200/60 transition-colors cursor-pointer ${
+                            isExpanded ? 'bg-primary-50/50' : 'hover:bg-slate-50/50'
+                          }`}
+                        >
+                          <td className="px-5 py-3.5 font-medium text-sm text-slate-700">
+                            <div className="flex items-center gap-2">
+                              <svg
+                                className={`w-4 h-4 text-slate-400 transition-transform ${isExpanded ? 'rotate-90' : ''}`}
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                              >
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                              </svg>
+                              {sector.name}
+                            </div>
+                          </td>
+                          <td className="px-5 py-3.5 text-sm text-slate-500">{sectorUsers.length}</td>
+                          <td className="px-5 py-3.5">
+                            <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${
+                              sector.is_active ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'
+                            }`}>
+                              {sector.is_active ? 'Ativo' : 'Inativo'}
+                            </span>
+                          </td>
+                          <td className="px-5 py-3.5">
+                            <div className="flex gap-1">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setEditingSector(sector);
+                                  setSectorForm({ name: sector.name });
+                                }}
+                                className="text-primary-500 hover:text-primary-600 text-sm font-semibold hover:bg-primary-50 px-3 py-1.5 rounded-lg transition-all"
+                              >
+                                Editar
+                              </button>
+                              {sector.is_active && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (confirm(`Desativar setor "${sector.name}"?`)) {
+                                      deactivateSectorMutation.mutate(sector.id);
+                                    }
+                                  }}
+                                  className="text-red-500 hover:text-red-600 text-sm font-semibold hover:bg-red-50 px-3 py-1.5 rounded-lg transition-all"
+                                >
+                                  Desativar
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                        {isExpanded && (
+                          <tr className="bg-slate-50/60 border-b border-surface-200/60">
+                            <td colSpan={4} className="px-5 py-4">
+                              <div className="flex items-center justify-between mb-3">
+                                <p className="text-sm font-semibold text-slate-600">
+                                  Usuarios do setor <span className="text-primary-500">{sector.name}</span>
+                                  <span className="ml-1.5 text-xs font-medium text-slate-400">({sectorUsers.length})</span>
+                                </p>
+                                {sectorUsers.length === 0 && (
+                                  <p className="text-xs text-slate-400">Nenhum usuario neste setor</p>
+                                )}
+                              </div>
+                              {sectorUsers.length > 0 && (
+                                <div className="overflow-hidden rounded-lg border border-surface-200 bg-white">
+                                  <table className="w-full">
+                                    <thead>
+                                      <tr className="border-b border-surface-200 bg-slate-50">
+                                        <th className="px-4 py-2.5 text-left text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Nome</th>
+                                        <th className="px-4 py-2.5 text-left text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Email</th>
+                                        <th className="px-4 py-2.5 text-left text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Role</th>
+                                        <th className="px-4 py-2.5 text-left text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Status</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {sectorUsers.map((u: any) => (
+                                        <tr key={u.id} className="border-b border-surface-200/60 last:border-b-0">
+                                          <td className="px-4 py-2.5 text-sm text-slate-700">{u.name}</td>
+                                          <td className="px-4 py-2.5 text-sm text-slate-500">{u.email}</td>
+                                          <td className="px-4 py-2.5">
+                                            <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${roleBadgeColors[u.role] || 'bg-slate-100 text-slate-600'}`}>
+                                              {roleLabels[u.role] || u.role}
+                                            </span>
+                                          </td>
+                                          <td className="px-4 py-2.5">
+                                            <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                              u.is_active ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'
+                                            }`}>
+                                              {u.is_active ? 'Ativo' : 'Inativo'}
+                                            </span>
+                                          </td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              )}
+                            </td>
+                          </tr>
+                        )}
+                      </Fragment>
+                    );
+                  })
                 )}
               </tbody>
             </table>
@@ -368,13 +452,6 @@ export default function AdminPanel() {
                 <input type="text" value={sectorForm.name} onChange={(e) => setSectorForm({ ...sectorForm, name: e.target.value })}
                   className="w-full px-4 py-2.5 border border-surface-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                   placeholder="Nome do setor" autoFocus />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Descricao</label>
-                <textarea value={sectorForm.description} onChange={(e) => setSectorForm({ ...sectorForm, description: e.target.value })}
-                  rows={3}
-                  className="w-full px-4 py-2.5 border border-surface-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none"
-                  placeholder="Descricao opcional" />
               </div>
             </div>
 

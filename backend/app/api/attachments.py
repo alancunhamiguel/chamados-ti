@@ -2,6 +2,7 @@ import uuid
 import os
 import secrets
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi.responses import FileResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -16,6 +17,55 @@ from app.schemas.ticket import AttachmentResponse
 router = APIRouter()
 settings = get_settings()
 
+# Whitelist of accepted file types (extensions + the common MIME types they map to).
+ALLOWED_EXTENSIONS = {
+    ".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg", ".bmp", ".tiff",
+    ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx",
+    ".txt", ".csv", ".log",
+    ".zip", ".rar", ".7z", ".tar", ".gz",
+    ".mp3", ".mp4", ".mov", ".wav",
+}
+
+ALLOWED_MIME_PREFIXES = {
+    "image/", "text/", "application/pdf", "application/msword",
+    "application/vnd.openxmlformats-officedocument", "application/zip",
+    "application/x-rar", "application/x-7z-compressed",
+    "audio/", "video/",
+}
+
+
+def parse_ticket_id(ticket_id: str) -> uuid.UUID:
+    try:
+        return uuid.UUID(ticket_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="ID invalido")
+
+
+def validate_file(file: UploadFile, content_length: int) -> str:
+    """Validate extension, size and MIME. Returns the original extension or raises 400."""
+    filename = file.filename or "arquivo"
+    ext = os.path.splitext(filename)[1].lower()
+
+    if content_length > settings.MAX_FILE_SIZE:
+        raise HTTPException(status_code=400, detail="Arquivo muito grande (max 50MB)")
+
+    if content_length <= 0:
+        raise HTTPException(status_code=400, detail="Arquivo vazio")
+
+    if ext not in ALLOWED_EXTENSIONS:
+        raise HTTPException(status_code=400, detail="Tipo de arquivo nao permitido")
+
+    mime = (file.content_type or "").lower()
+    if mime:
+        if not any(mime.startswith(p) for p in ALLOWED_MIME_PREFIXES):
+            raise HTTPException(status_code=400, detail="Tipo de arquivo nao permitido")
+
+    return ext
+
+
+def can_view_attachment(user: User, ticket: Ticket) -> bool:
+    return user.role in ("technician", "admin") or ticket.created_by == user.id
+
 
 @router.get("/{ticket_id}/attachments", response_model=list[AttachmentResponse])
 async def list_attachments(
@@ -23,10 +73,12 @@ async def list_attachments(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    try:
-        tid = uuid.UUID(ticket_id)
-    except ValueError:
-        raise HTTPException(status_code=400, detail="ID invalido")
+    tid = parse_ticket_id(ticket_id)
+    ticket = (await db.execute(select(Ticket).where(Ticket.id == tid))).scalar_one_or_none()
+    if not ticket:
+        raise HTTPException(status_code=404, detail="Chamado nao encontrado")
+    if not can_view_attachment(user, ticket):
+        raise HTTPException(status_code=403, detail="Sem permissao")
 
     result = await db.execute(
         select(TicketAttachment)
@@ -57,10 +109,7 @@ async def upload_attachment(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    try:
-        tid = uuid.UUID(ticket_id)
-    except ValueError:
-        raise HTTPException(status_code=400, detail="ID invalido")
+    tid = parse_ticket_id(ticket_id)
 
     result = await db.execute(select(Ticket).where(Ticket.id == tid))
     ticket = result.scalar_one_or_none()
@@ -74,12 +123,10 @@ async def upload_attachment(
         raise HTTPException(status_code=403, detail="Sem permissao")
 
     content = await file.read()
-    if len(content) > settings.MAX_FILE_SIZE:
-        raise HTTPException(status_code=400, detail="Arquivo muito grande (max 10MB)")
+    ext = validate_file(file, len(content))
 
     os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
 
-    ext = os.path.splitext(file.filename or "")[1]
     stored_name = f"{secrets.token_hex(16)}{ext}"
     file_path = os.path.join(settings.UPLOAD_DIR, stored_name)
 
@@ -108,6 +155,38 @@ async def upload_attachment(
     )
 
 
+@router.get("/{ticket_id}/attachments/{attachment_id}/download")
+async def download_attachment(
+    ticket_id: str,
+    attachment_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    aid = parse_ticket_id(attachment_id)
+
+    result = await db.execute(
+        select(TicketAttachment).where(TicketAttachment.id == aid)
+    )
+    attachment = result.scalar_one_or_none()
+    if not attachment:
+        raise HTTPException(status_code=404, detail="Anexo nao encontrado")
+
+    ticket = (await db.execute(select(Ticket).where(Ticket.id == attachment.ticket_id))).scalar_one_or_none()
+    if not ticket or not can_view_attachment(user, ticket):
+        raise HTTPException(status_code=403, detail="Sem permissao")
+
+    file_path = os.path.join(settings.UPLOAD_DIR, attachment.stored_filename)
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="Arquivo nao encontrado no disco")
+
+    return FileResponse(
+        path=file_path,
+        filename=attachment.original_filename,
+        media_type=attachment.mime_type or "application/octet-stream",
+        headers={"Cache-Control": "private, no-store"},
+    )
+
+
 @router.delete("/{ticket_id}/attachments/{attachment_id}")
 async def delete_attachment(
     ticket_id: str,
@@ -115,10 +194,7 @@ async def delete_attachment(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    try:
-        aid = uuid.UUID(attachment_id)
-    except ValueError:
-        raise HTTPException(status_code=400, detail="ID invalido")
+    aid = parse_ticket_id(attachment_id)
 
     result = await db.execute(select(TicketAttachment).where(TicketAttachment.id == aid))
     attachment = result.scalar_one_or_none()

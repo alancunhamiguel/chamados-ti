@@ -1,16 +1,17 @@
 import { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react';
 import { User } from '../types';
-import { login as apiLogin, getMe, updateOnlineStatus as apiUpdateStatus } from '../api/auth';
+import { login as apiLogin, googleLogin as apiGoogleLogin, getMe, updateOnlineStatus as apiUpdateStatus } from '../api/auth';
 
 interface AuthContextType {
   user: User | null;
   token: string | null;
   login: (email: string, password: string) => Promise<void>;
+  loginWithGoogle: (credential: string) => Promise<void>;
   logout: () => void;
   updateUser: (user: User) => void;
   updateUserStatus: (status: string) => Promise<void>;
   isAuthenticated: boolean;
-  hasRole: (role: string) => boolean;
+  hasRole: (role: string | string[]) => boolean;
   authLoading: boolean;
 }
 
@@ -45,6 +46,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = async (email: string, password: string) => {
     const data = await apiLogin(email, password);
+    storeSession(data);
+  };
+
+  const loginWithGoogle = async (credential: string) => {
+    const data = await apiGoogleLogin(credential);
+    storeSession(data);
+  };
+
+  const storeSession = (data: { access_token: string; refresh_token: string; user: User }) => {
     localStorage.setItem('token', data.access_token);
     localStorage.setItem('refresh_token', data.refresh_token);
     localStorage.setItem('user', JSON.stringify(data.user));
@@ -72,10 +82,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const isAuthenticated = !!token && !!user;
-  const hasRole = (role: string) => user?.role === role;
+  const hasRole = (role: string | string[]) => {
+    if (!user) return false;
+    const roles = Array.isArray(role) ? role : [role];
+    return roles.includes(user.role);
+  };
 
   return (
-    <AuthContext.Provider value={{ user, token, login, logout, updateUser, updateUserStatus, isAuthenticated, hasRole, authLoading }}>
+    <AuthContext.Provider value={{ user, token, login, loginWithGoogle, logout, updateUser, updateUserStatus, isAuthenticated, hasRole, authLoading }}>
       {children}
     </AuthContext.Provider>
   );

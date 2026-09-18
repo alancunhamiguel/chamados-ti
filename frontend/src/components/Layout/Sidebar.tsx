@@ -70,10 +70,12 @@ export default function Sidebar() {
   const [team, setTeam] = useState<User[]>([]);
 
   const isStaff = hasRole('admin') || hasRole('technician');
+  const isAdmin = hasRole('admin');
   const currentStatus = statusConfig[user?.online_status || 'offline'];
 
   const filteredNavItems = navItems.filter((item) => {
-    if (item.path === '/dashboard' || item.path === '/admin') return isStaff;
+    if (item.path === '/admin') return isAdmin;
+    if (item.path === '/dashboard') return isStaff;
     return true;
   });
 
@@ -95,13 +97,11 @@ export default function Sidebar() {
     <div className="fixed left-0 top-0 h-full w-64 bg-white flex flex-col z-40" style={{ boxShadow: '12px 0 40px rgba(0, 0, 0, 0.12), 6px 0 20px rgba(0, 102, 255, 0.06), 1px 0 0 #E2E8F0' }}>
       {/* Logo */}
       <div className="px-5 py-5 flex items-center justify-center gap-2" style={{ borderBottom: '1px solid #F1F5F9' }}>
-        <div className="w-10 h-10 bg-primary-500 rounded-xl flex items-center justify-center shadow-sm flex-shrink-0">
-          <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-          </svg>
+        <div className="w-20 h-10 bg-white rounded-lg flex items-center justify-center shadow-sm flex-shrink-0">
+          <img src="/logo.png" alt="Grupo FedCorp" className="max-w-full max-h-full object-contain" />
         </div>
         <div className="leading-tight">
-          <p className="font-bold text-slate-800 text-base" style={{ fontFamily: 'Inter, sans-serif' }}>Chamados TI</p>
+          <p className="font-bold text-slate-800 text-base" style={{ fontFamily: 'Inter, sans-serif' }}>Grupo FedCorp</p>
           <p className="text-[10px] text-slate-400 font-medium">Helpdesk</p>
         </div>
       </div>

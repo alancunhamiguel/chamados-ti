@@ -19,11 +19,19 @@ function PrivateRoute({ children }: { children: React.ReactNode }) {
   return isAuthenticated ? <>{children}</> : <Navigate to="/login" />;
 }
 
-function AdminRoute({ children }: { children: React.ReactNode }) {
+function StaffRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, hasRole, authLoading } = useAuth();
   if (authLoading) return <div className="flex items-center justify-center h-screen"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div></div>;
   if (!isAuthenticated) return <Navigate to="/login" />;
   if (!hasRole('admin') && !hasRole('technician')) return <Navigate to="/tickets" />;
+  return <>{children}</>;
+}
+
+function AdminRoute({ children }: { children: React.ReactNode }) {
+  const { isAuthenticated, hasRole, authLoading } = useAuth();
+  if (authLoading) return <div className="flex items-center justify-center h-screen"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div></div>;
+  if (!isAuthenticated) return <Navigate to="/login" />;
+  if (!hasRole('admin')) return <Navigate to="/tickets" />;
   return <>{children}</>;
 }
 
@@ -33,7 +41,7 @@ function AppRoutes() {
       <Route path="/login" element={<Login />} />
       <Route path="/" element={<PrivateRoute><Layout /></PrivateRoute>}>
         <Route index element={<Navigate to="/tickets" />} />
-        <Route path="dashboard" element={<AdminRoute><Dashboard /></AdminRoute>} />
+        <Route path="dashboard" element={<StaffRoute><Dashboard /></StaffRoute>} />
         <Route path="tickets" element={<TicketListPage />} />
         <Route path="tickets/new" element={<NewTicket />} />
         <Route path="tickets/:id" element={<TicketDetailPage />} />
