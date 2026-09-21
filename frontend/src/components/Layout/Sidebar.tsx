@@ -96,14 +96,8 @@ export default function Sidebar() {
   return (
     <div className="fixed left-0 top-0 h-full w-64 bg-white flex flex-col z-40" style={{ boxShadow: '12px 0 40px rgba(0, 0, 0, 0.12), 6px 0 20px rgba(0, 102, 255, 0.06), 1px 0 0 #E2E8F0' }}>
       {/* Logo */}
-      <div className="px-5 py-5 flex items-center justify-center gap-2" style={{ borderBottom: '1px solid #F1F5F9' }}>
-        <div className="w-20 h-10 bg-white rounded-lg flex items-center justify-center shadow-sm flex-shrink-0">
-          <img src="/logo.png" alt="Grupo FedCorp" className="max-w-full max-h-full object-contain" />
-        </div>
-        <div className="leading-tight">
-          <p className="font-bold text-slate-800 text-base" style={{ fontFamily: 'Inter, sans-serif' }}>Grupo FedCorp</p>
-          <p className="text-[10px] text-slate-400 font-medium">Helpdesk</p>
-        </div>
+      <div className="px-5 py-5 flex items-center justify-center" style={{ borderBottom: '1px solid #F1F5F9' }}>
+        <img src="/logo.png" alt="Grupo FedCorp" className="w-40 h-auto object-contain" />
       </div>
 
       {/* Navigation */}

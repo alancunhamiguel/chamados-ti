@@ -77,11 +77,10 @@ export default function Login() {
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="text-center mb-8">
-          <div className="w-24 h-16 bg-white rounded-2xl flex items-center justify-center mx-auto mb-4 p-2 shadow-card">
+          <div className="w-44 h-24 bg-white rounded-2xl flex items-center justify-center mx-auto mb-4 p-3 shadow-card">
             <img src="/logo.png" alt="Grupo FedCorp" className="max-w-full max-h-full object-contain" />
           </div>
-          <h1 className="text-2xl font-bold text-slate-800" style={{ fontFamily: 'Inter, sans-serif' }}>Grupo FedCorp</h1>
-          <p className="text-sm text-slate-400 mt-1">Sistema de Gerenciamento de Chamados</p>
+          <p className="text-base font-semibold text-slate-500">Sistema de Gerenciamento de Chamados</p>
         </div>
 
         {/* Form Card */}
