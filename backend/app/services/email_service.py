@@ -1,3 +1,4 @@
+import asyncio
 import os
 from html import escape as _esc
 from datetime import datetime, timezone
@@ -41,10 +42,11 @@ def _log_email(to: str, subject: str, body_html: str) -> None:
         f.write("\n")
 
 
-async def send_email(to: str, subject: str, body_html: str) -> bool:
-    if not settings.SMTP_USER or not settings.SMTP_PASS:
-        _log_email(to, subject, body_html)
-        return True
+_EMAIL_TASKS: set[asyncio.Task] = set()
+
+
+async def _deliver_email(to: str, subject: str, body_html: str) -> None:
+    """Envia de fato pelo SMTP. Falhas caem no log local, nunca propagam."""
     try:
         message = MIMEMultipart("alternative")
         message["From"] = settings.EMAIL_FROM
@@ -59,8 +61,8 @@ async def send_email(to: str, subject: str, body_html: str) -> bool:
             start_tls=True,
             username=settings.SMTP_USER,
             password=settings.SMTP_PASS,
+            timeout=settings.SMTP_TIMEOUT,
         )
-        return True
     except Exception as e:
         _log_email(
             to,
@@ -68,7 +70,23 @@ async def send_email(to: str, subject: str, body_html: str) -> bool:
             f"<p>FALHA NO ENVIO SMTP: {type(e).__name__}: {e}</p>"
             f"<p>Assunto original: {subject}</p><hr/>{body_html}",
         )
-        return False
+
+
+async def send_email(to: str, subject: str, body_html: str) -> bool:
+    """Agenda o envio do e-mail e retorna na hora.
+
+    O SMTP roda em background (create_task) para nao bloquear a resposta HTTP:
+    um evento de chamado notifica varios destinatarios e cada envio pode levar
+    segundos. Sem SMTP configurado, apenas grava em logs/emails.log.
+    """
+    if not settings.SMTP_USER or not settings.SMTP_PASS:
+        _log_email(to, subject, body_html)
+        return True
+
+    task = asyncio.create_task(_deliver_email(to, subject, body_html))
+    _EMAIL_TASKS.add(task)
+    task.add_done_callback(_EMAIL_TASKS.discard)
+    return True
 
 
 def build_new_ticket_email(ticket_number: int, title: str, creator_name: str, priority: str) -> str:

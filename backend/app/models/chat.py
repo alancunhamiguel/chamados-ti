@@ -14,7 +14,7 @@ class TicketChat(Base):
     sender_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"), nullable=False)
     message: Mapped[str] = mapped_column(Text, nullable=False)
     is_system: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     ticket = relationship("Ticket", back_populates="chat_messages")
     sender = relationship("User")

@@ -29,6 +29,7 @@ class Settings(BaseSettings):
     SMTP_PORT: int = 587
     SMTP_USER: str = ""
     SMTP_PASS: str = ""
+    SMTP_TIMEOUT: int = 15
     EMAIL_FROM: str = "Chamados TI <chamados@empresa.com>"
     CORS_ORIGINS: str = "http://localhost:3000,http://localhost:5173"
     GOOGLE_CLIENT_ID: str = ""

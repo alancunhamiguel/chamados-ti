@@ -179,6 +179,14 @@ Vazio — namespace reservado (nao ha helpers no momento).
 8. **Logo:** o banner oficial (FedCorp) fornecido pelo time e `frontend/public/logo.png` versionado, para nao quebrar a imagem no repo. A versao original antiga ficou em `frontend/brand/` (gitignored).
 9. **Docker + PostgreSQL:** adicionado proxy de `/ws` no `nginx.conf` (chat em producao); criada a raiz `.env` (gitignored) com `DATABASE_URL` para o postgres do compose; seed agora pode ser desligado via `SEED_ENABLED=false` (padrao `true`). Stack validado com `docker compose up --build` (postgres healthy, login e seed OK).
 
+## BUGS ENCONTRADOS NO E2E (Docker + PostgreSQL, set/2026)
+
+Teste ponta a ponta (46 verificacoes: auth/RBAC, chamados, anexos, comentarios, chat REST+WebSocket, dashboard, setores, refresh, Google) rodado contra o stack Docker (nginx -> backend -> Postgres). Tres falhas reais que o SQLite dos testes escondia:
+
+10. **Timestamps sem timezone:** as colunas `DateTime` viravam `timestamp without time zone`, mas o codigo grava `datetime.now(timezone.utc)` (aware). O SQLite aceita, o Postgres rejeita (`can't subtract offset-naive and offset-aware datetimes`) -> criacao de chamado retornava 500. Correcao: `DateTime(timezone=True)` em todos os modelos (`user`, `ticket`, `comment`, `chat`). Exigiu recriar o volume do Postgres (`docker compose down -v`).
+11. **`max(uuid)` no Postgres:** `GET /api/tickets/notifications` usava `func.max(TicketChat.id)`; o Postgres nao define `max()` para UUID (`function max(uuid) does not exist`) -> 500. Correcao: `ROW_NUMBER() OVER (PARTITION BY ticket_id ORDER BY created_at DESC, id DESC)` (portavel SQLite/Postgres).
+12. **E-mail bloqueando a request:** a criacao de chamado notificava criador + staff de forma sincrona (4 envios SMTP, ~15s por request). Correcao: `send_email` agora agenda o envio em background (`asyncio.create_task`) com `SMTP_TIMEOUT` (padrao 15s); a API responde na hora e falhas continuam indo para `logs/emails.log`.
+
 ## MELHORIAS FUTURAS (fora de escopo deliberadamente)
 
 - `backend/run.py` e redundante com o CLI `uvicorn app.main:app`; pode ser removido.

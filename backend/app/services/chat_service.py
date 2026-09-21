@@ -44,20 +44,27 @@ async def delete_chat_messages(db: AsyncSession, ticket_id: uuid.UUID):
 async def get_chat_notifications(db: AsyncSession, user: "User") -> list[dict]:
     from app.models.user import User
 
+    # Ultima mensagem de cada chamado. Usa ROW_NUMBER() em vez de max(id) porque
+    # o Postgres nao define max() para UUID (funcionava no SQLite, quebrava no PG).
     subq = (
         select(
-            TicketChat.ticket_id,
-            sqlfunc.max(TicketChat.id).label("last_id"),
+            TicketChat.id.label("id"),
+            sqlfunc.row_number()
+            .over(
+                partition_by=TicketChat.ticket_id,
+                order_by=(TicketChat.created_at.desc(), TicketChat.id.desc()),
+            )
+            .label("rn"),
         )
-        .group_by(TicketChat.ticket_id)
         .subquery()
     )
 
     stmt = (
         select(TicketChat)
         .options(selectinload(TicketChat.sender), selectinload(TicketChat.ticket))
-        .join(subq, TicketChat.id == subq.c.last_id)
+        .join(subq, TicketChat.id == subq.c.id)
         .join(Ticket, Ticket.id == TicketChat.ticket_id)
+        .where(subq.c.rn == 1)
         .where(Ticket.status != "closed")
         .where(TicketChat.sender_id != user.id)
     )
