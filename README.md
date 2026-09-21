@@ -89,13 +89,6 @@ docker compose up -d --build
 Frontend: http://localhost:3000
 Swagger: http://localhost:8000/docs
 
-## Credenciais de Teste
-
-| Usuario     | Email                    | Senha     | Role        |
-|-------------|--------------------------|-----------|-------------|
-| Admin       | admin@empresa.com        | admin123  | admin       |
-| Tecnico 1   | tecnico1@empresa.com     | tech123   | technician  |
-| Colaborador | colaborador@empresa.com  | user123   | employee    |
 
 ## Documentação
 
