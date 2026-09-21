@@ -88,7 +88,9 @@ export default function ChatDock() {
               handleIncoming(data);
               clearUnread(activeChatId);
             }
-          } catch {}
+          } catch {
+            // ignora eventos invalidos; o polling reestabelece em caso de falha
+          }
         };
         ws.onclose = () => {
           setWsOnline(false);
@@ -117,7 +119,9 @@ export default function ChatDock() {
           }
           lastCountRef.current = data.length;
           setMessages(data);
-        } catch {}
+        } catch {
+          // ignora falhas temporarias; o ciclo de polling continua
+        }
       }, 3000);
     };
 

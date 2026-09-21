@@ -90,7 +90,7 @@ export default function TicketDetailPage() {
 
   useEffect(() => {
     if (id && ticket) addToOpenChats(id, ticket.ticket_number);
-  }, [id, ticket]);
+  }, [id, ticket, addToOpenChats]);
 
   const { data: comments } = useQuery({
     queryKey: ['comments', id],

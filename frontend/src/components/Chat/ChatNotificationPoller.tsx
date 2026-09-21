@@ -43,8 +43,10 @@ export default function ChatNotificationPoller() {
           }
           bumpUnreadRef.current(notif.ticket_id, notif.message, notif.sender_name, notif.created_at);
         }
-      } catch {}
-    };
+      } catch {
+          // ignora falhas temporarias; a proxima chamada tenta novamente
+        }
+      };
 
     poll();
     pollRef.current = setInterval(poll, 3000);
