@@ -65,7 +65,7 @@ const navItems = [
 export default function Sidebar() {
   const location = useLocation();
   const { user, hasRole, updateUserStatus } = useAuth();
-  const { openChats, hasNewMessages } = useChat();
+  const { hasNewMessages } = useChat();
   const [showStatusMenu, setShowStatusMenu] = useState(false);
   const [team, setTeam] = useState<User[]>([]);
 
@@ -120,7 +120,7 @@ export default function Sidebar() {
                 {item.icon}
               </span>
               {item.label}
-              {item.path === '/tickets' && hasNewMessages && openChats.length === 0 && (
+              {item.path === '/tickets' && hasNewMessages && (
                 <span className="ml-auto w-5 h-5 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center animate-pulse">
                   !
                 </span>

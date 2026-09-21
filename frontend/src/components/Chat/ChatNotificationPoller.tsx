@@ -14,19 +14,17 @@ interface Notification {
 }
 
 export default function ChatNotificationPoller() {
-  const { openChats, openChat, setHasNewMessages } = useChat();
+  const { openChats, addToOpenChats, bumpUnread } = useChat();
   const { user } = useAuth();
   const seenRef = useRef<Set<string>>(new Set());
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const openChatsRef = useRef(openChats);
-  const openChatRef = useRef(openChat);
-  const userIdRef = useRef(user?.id);
-  const setHasNewMessagesRef = useRef(setHasNewMessages);
+  const addRef = useRef(addToOpenChats);
+  const bumpUnreadRef = useRef(bumpUnread);
 
   useEffect(() => { openChatsRef.current = openChats; }, [openChats]);
-  useEffect(() => { openChatRef.current = openChat; }, [openChat]);
-  useEffect(() => { userIdRef.current = user?.id; }, [user?.id]);
-  useEffect(() => { setHasNewMessagesRef.current = setHasNewMessages; }, [setHasNewMessages]);
+  useEffect(() => { addRef.current = addToOpenChats; }, [addToOpenChats]);
+  useEffect(() => { bumpUnreadRef.current = bumpUnread; }, [bumpUnread]);
 
   useEffect(() => {
     if (!user) return;
@@ -39,13 +37,11 @@ export default function ChatNotificationPoller() {
           if (seenRef.current.has(notif.message_id)) continue;
           seenRef.current.add(notif.message_id);
 
-          const chatIsOpen = openChatsRef.current.some(c => c.ticketId === notif.ticket_id);
-
-          if (!chatIsOpen) {
-            openChatRef.current(notif.ticket_id, notif.ticket_number ?? undefined);
-          } else {
-            setHasNewMessagesRef.current(true);
+          const chatExists = openChatsRef.current.some(c => c.ticketId === notif.ticket_id);
+          if (!chatExists) {
+            addRef.current(notif.ticket_id, notif.ticket_number ?? undefined);
           }
+          bumpUnreadRef.current(notif.ticket_id, notif.message, notif.sender_name, notif.created_at);
         }
       } catch {}
     };

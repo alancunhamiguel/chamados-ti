@@ -77,7 +77,7 @@ export default function TicketDetailPage() {
   const [showCloseConfirm, setShowCloseConfirm] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editForm, setEditForm] = useState({ title: '', description: '', category: '' });
-  const { openChat, closeChat, isChatOpen } = useChat();
+  const { addToOpenChats, openChat, closeChat, isChatOpen } = useChat();
 
   const { data: ticket } = useQuery({
     queryKey: ['ticket', id],
@@ -89,7 +89,7 @@ export default function TicketDetailPage() {
   const ticketChatOpen = id ? isChatOpen(id) : false;
 
   useEffect(() => {
-    if (id && ticket) openChat(id, ticket.ticket_number);
+    if (id && ticket) addToOpenChats(id, ticket.ticket_number);
   }, [id, ticket]);
 
   const { data: comments } = useQuery({
