@@ -56,6 +56,21 @@ export default function AdminPanel() {
     onError: () => addToast('error', 'Erro ao atualizar usuario.'),
   });
 
+  const deleteUserMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const response = await api.delete(`/users/${id}`);
+      return response.data;
+    },
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ['users'] });
+      addToast('success', data?.message || 'Usuario excluido!');
+    },
+    onError: (err: any) => {
+      const detail = err?.response?.data?.detail;
+      addToast('error', typeof detail === 'string' ? detail : 'Erro ao excluir usuario.');
+    },
+  });
+
   const createSectorMutation = useMutation({
     mutationFn: async (data: typeof sectorForm) => {
       const response = await api.post('/sectors', data);
@@ -85,17 +100,20 @@ export default function AdminPanel() {
     onError: () => addToast('error', 'Erro ao atualizar setor.'),
   });
 
-  const deactivateSectorMutation = useMutation({
+  const deleteSectorMutation = useMutation({
     mutationFn: async (id: string) => {
       const response = await api.delete(`/sectors/${id}`);
       return response.data;
     },
-    onSuccess: () => {
+    onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ['sectors-all'] });
       queryClient.invalidateQueries({ queryKey: ['sectors'] });
-      addToast('success', 'Setor desativado!');
+      addToast('success', data?.message || 'Setor excluido!');
     },
-    onError: () => addToast('error', 'Erro ao desativar setor.'),
+    onError: (err: any) => {
+      const detail = err?.response?.data?.detail;
+      addToast('error', typeof detail === 'string' ? detail : 'Erro ao excluir setor.');
+    },
   });
 
   const handleEdit = (user: any) => {
@@ -202,12 +220,24 @@ export default function AdminPanel() {
                       </span>
                     </td>
                     <td className="px-5 py-3.5">
-                      <button
-                        onClick={() => handleEdit(user)}
-                        className="text-primary-500 hover:text-primary-600 text-sm font-semibold hover:bg-primary-50 px-3 py-1.5 rounded-lg transition-all"
-                      >
-                        Editar
-                      </button>
+                      <div className="flex gap-1">
+                        <button
+                          onClick={() => handleEdit(user)}
+                          className="text-primary-500 hover:text-primary-600 text-sm font-semibold hover:bg-primary-50 px-3 py-1.5 rounded-lg transition-all"
+                        >
+                          Editar
+                        </button>
+                        <button
+                          onClick={() => {
+                            if (confirm(`Excluir usuario "${user.name}"?`)) {
+                              deleteUserMutation.mutate(user.id);
+                            }
+                          }}
+                          className="text-red-500 hover:text-red-600 text-sm font-semibold hover:bg-red-50 px-3 py-1.5 rounded-lg transition-all"
+                        >
+                          Excluir
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -303,19 +333,17 @@ export default function AdminPanel() {
                               >
                                 Editar
                               </button>
-                              {sector.is_active && (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    if (confirm(`Desativar setor "${sector.name}"?`)) {
-                                      deactivateSectorMutation.mutate(sector.id);
-                                    }
-                                  }}
-                                  className="text-red-500 hover:text-red-600 text-sm font-semibold hover:bg-red-50 px-3 py-1.5 rounded-lg transition-all"
-                                >
-                                  Desativar
-                                </button>
-                              )}
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (confirm(`Excluir setor "${sector.name}"?`)) {
+                                    deleteSectorMutation.mutate(sector.id);
+                                  }
+                                }}
+                                className="text-red-500 hover:text-red-600 text-sm font-semibold hover:bg-red-50 px-3 py-1.5 rounded-lg transition-all"
+                              >
+                                Excluir
+                              </button>
                             </div>
                           </td>
                         </tr>

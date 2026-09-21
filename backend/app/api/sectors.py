@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel
 from app.database import get_db
@@ -78,5 +79,14 @@ async def delete_sector(sector_id: str, db: AsyncSession = Depends(get_db), admi
     if not sector:
         raise HTTPException(status_code=404, detail="Setor nao encontrado")
 
-    sector.is_active = False
-    return {"message": "Setor desativado"}
+    try:
+        await db.delete(sector)
+        await db.flush()
+    except IntegrityError:
+        await db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail="Setor possui chamados associados. Marque como inativo em vez de excluir.",
+        )
+
+    return {"message": "Setor excluido"}

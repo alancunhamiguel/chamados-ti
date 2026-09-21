@@ -19,6 +19,14 @@ const priorityPT: Record<string, string> = {
   critical: 'Critica',
 };
 
+const formatDuration = (hours: number | null | undefined): string => {
+  if (hours == null) return '-';
+  const totalMinutes = Math.round(hours * 60);
+  const h = Math.floor(totalMinutes / 60);
+  const min = totalMinutes % 60;
+  return `${h}h ${String(min).padStart(2, '0')}min`;
+};
+
 export default function Dashboard() {
   const { data: stats } = useQuery({ queryKey: ['dashboard-stats'], queryFn: getDashboardStats });
   const { data: statusData } = useQuery({ queryKey: ['dashboard-status'], queryFn: getByStatus });
@@ -92,7 +100,7 @@ export default function Dashboard() {
             </div>
           </div>
           <p className="text-2xl font-bold text-purple-500">
-            {stats?.avg_resolution_hours ? `${stats.avg_resolution_hours}h` : '-'}
+            {formatDuration(stats?.avg_resolution_hours)}
           </p>
           <p className="text-xs text-slate-400 font-medium mt-1">Tempo Medio</p>
         </div>

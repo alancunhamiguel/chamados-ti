@@ -1,6 +1,7 @@
 import uuid
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.models.user import User
@@ -60,5 +61,17 @@ async def delete_user(user_id: uuid.UUID, db: AsyncSession = Depends(get_db), ad
     if not user:
         raise HTTPException(status_code=404, detail="Usuario nao encontrado")
 
-    user.is_active = False
-    return {"message": "Usuario desativado"}
+    if user.id == admin.id:
+        raise HTTPException(status_code=400, detail="Nao e possivel excluir a propria conta")
+
+    try:
+        await db.delete(user)
+        await db.flush()
+    except IntegrityError:
+        await db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail="Usuario possui chamados ou registros associados. Marque como inativo em vez de excluir.",
+        )
+
+    return {"message": "Usuario excluido"}
