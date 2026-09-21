@@ -176,6 +176,8 @@ Vazio — namespace reservado (nao ha helpers no momento).
 5. **`.env.example`:** adicionados `GOOGLE_ALLOWED_DOMAIN`, origin `127.0.0.1:3000` no CORS e nota dos vars do frontend (`VITE_*`).
 6. **`.gitignore`:** removido bloco orfao do Alembic (ja removido do projeto).
 7. **Artefatos:** removidos `backend/test.db`, `backend/server.log`, `frontend/vite.log` (lixo de execucao).
+8. **Logo (`repo publico`):** as logos reais foram movidas para `frontend/brand/` (gitignored); no `public/` ficam placeholders neutros versionados para nao quebrar a imagem.
+9. **Docker + PostgreSQL:** adicionado proxy de `/ws` no `nginx.conf` (chat em producao); criada a raiz `.env` (gitignored) com `DATABASE_URL` para o postgres do compose; seed agora pode ser desligado via `SEED_ENABLED=false` (padrao `true`). Stack validado com `docker compose up --build` (postgres healthy, login e seed OK).
 
 ## MELHORIAS FUTURAS (fora de escopo deliberadamente)
 

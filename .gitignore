@@ -44,9 +44,8 @@ frontend/node_modules/
 frontend/dist/
 frontend/.cache/
 
-# Internal branding assets (Grupo FedCorp - not for public repo)
-frontend/public/logo.png
-frontend/public/favicon.jpg
+# Branding real (Grupo FedCorp) - mantido fora do repo publico
+frontend/brand/
 
 # Backend uploads
 backend/app/uploads/*

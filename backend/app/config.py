@@ -34,6 +34,7 @@ class Settings(BaseSettings):
     GOOGLE_CLIENT_ID: str = ""
     GOOGLE_CLIENT_SECRET: str = ""
     GOOGLE_ALLOWED_DOMAIN: str = "grupofedcorp.com.br"
+    SEED_ENABLED: bool = True
     UPLOAD_DIR: str = "app/uploads"
     MAX_FILE_SIZE: int = 50 * 1024 * 1024
 
