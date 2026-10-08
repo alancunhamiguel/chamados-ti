@@ -103,8 +103,40 @@ do bot e `CLAUDE_URL=http://localhost:8788` no `backend/.env`; ou `BOT_PROVIDER=
 binário `claude` no PATH (opcionalmente `CLAUDE_CONFIG_DIR` apontando para a pasta com o
 `.credentials.json` da conta do bot).
 
-Limites da opção B: o uso compete com a cota da assinatura, o token OAuth pode expirar (basta recopiar
-o arquivo) e cada chamada carrega o prompt fixo do CLI, então é um pouco mais lenta que a API.
+**Opção C: reaproveitar o `fedhub-claude` que já roda no host do FedHub (192.168.0.100)**
+
+A API do FedHub não tem rota genérica de prompt (só a análise de PDF usa a Claude por dentro), e o
+contêiner `fedhub-claude` só é visível na rede interna do compose do FedHub. Para o SuporteBot usá-lo:
+
+1. No host do FedHub, no `docker-compose.yml`, publique a porta do `fedhub-claude` só na IP da rede
+   local e ligue o token (mesmas três linhas de token já usadas no `claude/claude_server.js` deste projeto;
+   copie o trecho `TOKEN` de lá para o `src/tools/claude_server.js` do FedHub):
+
+```yaml
+  fedhub-claude:
+    environment:
+      - CLAUDE_SERVER_TOKEN=${CLAUDE_SERVER_TOKEN:-}
+    ports:
+      - "192.168.0.100:8788:8788"
+```
+
+   Adicione `CLAUDE_SERVER_TOKEN=<segredo longo>` no `.env` do FedHub e suba com
+   `docker compose up -d fedhub-claude` (o `claude_server.js` vem do volume `./src`, não precisa rebuild).
+   Essa porta não passa pelo Caddy/Kong/ngrok; ainda assim, restrinja no firewall do host à IP do
+   servidor do chamados.
+2. Aqui, no `backend/.env` (ou no `.env` da raiz, para o Docker):
+
+```env
+CLAUDE_URL=http://192.168.0.100:8788
+CLAUDE_TOKEN=<o mesmo segredo>
+```
+
+3. Reinicie o backend e confira *Admin > SuporteBot*. Se o chamados rodar na mesma máquina do FedHub,
+   dá para pular a porta: ligue o backend à rede do compose do FedHub e use `http://fedhub-claude:8788`.
+
+Limites das opções B e C: o uso compete com a cota da assinatura (na C, também com a automação de PDF
+do FedHub), o token OAuth pode expirar (basta recopiar o arquivo) e cada chamada carrega o prompt fixo
+do CLI, então é um pouco mais lenta que a API.
 
 **Como o bot aprende:** em *Admin > SuporteBot* a equipe cadastra artigos (procedimentos, sistemas
 internos, políticas). Todo artigo ativo entra no prompt do bot em cada resposta. Técnicos e admins

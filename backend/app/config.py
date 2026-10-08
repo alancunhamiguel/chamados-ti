@@ -51,6 +51,7 @@ class Settings(BaseSettings):
     BOT_MAX_HISTORY: int = 40           # mensagens anteriores enviadas como contexto
     BOT_FALLBACKS: bool = True          # fallback automatico se o modelo recusar por politica (api)
     CLAUDE_URL: str = ""                # ex.: http://chamados-claude:8788 (claude_server.js)
+    CLAUDE_TOKEN: str = ""              # header X-Claude-Token, se o claude_server.js exigir (CLAUDE_SERVER_TOKEN)
     CLAUDE_BIN: str = "claude"          # modo local sem CLAUDE_URL: binario do Claude Code CLI
     CLAUDE_CONFIG_DIR: str = ""         # modo local: pasta com o .credentials.json da conta do bot
     BOT_CLI_MODEL: str = ""             # modelo no CLI ("" = padrao do plano; ex.: sonnet, opus)

@@ -27,6 +27,11 @@ const PORT = Number(process.env.CLAUDE_SERVER_PORT || 8788);
 const CLAUDE_BIN = process.env.CLAUDE_BIN || "claude";
 const MAX_BODY = 50 * 1024 * 1024; // 50 MB de prompt
 const TIMEOUT_PADRAO_S = Number(process.env.CLAUDE_TIMEOUT_S || 900); // 15 min
+// Token compartilhado opcional: quando CLAUDE_SERVER_TOKEN está definido, /exec e
+// /exec-arquivo exigem o header X-Claude-Token com o mesmo valor. Necessário se a
+// porta for publicada fora da rede do compose (ex.: para outro host da rede local).
+// /status continua aberto para o healthcheck do Docker.
+const TOKEN = (process.env.CLAUDE_SERVER_TOKEN || "").trim();
 
 function lerBody(req) {
   return new Promise((resolve, reject) => {
@@ -127,6 +132,9 @@ http.createServer(async (req, res) => {
   try {
     if (req.method === "GET" && req.url === "/status") return json(res, 200, await status());
     if (req.method === "POST" && (req.url === "/exec" || req.url === "/exec-arquivo")) {
+      if (TOKEN && String(req.headers["x-claude-token"] || "") !== TOKEN) {
+        return json(res, 401, { ok: false, erro: "token inválido: envie o header X-Claude-Token" });
+      }
       const comArquivo = req.url === "/exec-arquivo";
       let body;
       try { body = JSON.parse(await lerBody(req)); } catch (e) { return json(res, 400, { ok: false, erro: `JSON inválido: ${e.message}` }); }
@@ -146,4 +154,4 @@ http.createServer(async (req, res) => {
   } catch (e) {
     json(res, 500, { ok: false, erro: e.message });
   }
-}).listen(PORT, "0.0.0.0", () => console.log(`[claude-server] ouvindo em :${PORT} (bin=${CLAUDE_BIN}, CLAUDE_CONFIG_DIR=${process.env.CLAUDE_CONFIG_DIR || "~/.claude"})`));
+}).listen(PORT, "0.0.0.0", () => console.log(`[claude-server] ouvindo em :${PORT} (bin=${CLAUDE_BIN}, CLAUDE_CONFIG_DIR=${process.env.CLAUDE_CONFIG_DIR || "~/.claude"}, token=${TOKEN ? "exigido" : "desligado"})`));

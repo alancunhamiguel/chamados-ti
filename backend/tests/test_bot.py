@@ -142,6 +142,57 @@ def test_cli_error_mapping():
     assert "Claude Code falhou" in str(claude_cli._mapear_erro("boom", "rc=1"))
 
 
+class _FakeResponse:
+    def __init__(self, status_code: int, payload: dict):
+        self.status_code = status_code
+        self._payload = payload
+
+    def json(self):
+        return self._payload
+
+
+class _FakeAsyncClient:
+    """Substitui httpx.AsyncClient: guarda a chamada e devolve a resposta programada."""
+    calls: list = []
+    response: _FakeResponse = _FakeResponse(200, {"ok": True, "resposta": "oi"})
+
+    def __init__(self, **kwargs):
+        pass
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *exc):
+        return False
+
+    async def post(self, url, json=None, headers=None):
+        _FakeAsyncClient.calls.append({"url": url, "json": json, "headers": headers})
+        return _FakeAsyncClient.response
+
+
+@pytest.mark.asyncio
+async def test_exec_http_sends_token_header_and_maps_401():
+    _FakeAsyncClient.calls.clear()
+    _FakeAsyncClient.response = _FakeResponse(200, {"ok": True, "resposta": '{"acao":"responder","resposta":"oi"}'})
+    with patch.object(claude_cli.settings, "CLAUDE_URL", "http://192.168.0.100:8788"), \
+         patch.object(claude_cli.settings, "CLAUDE_TOKEN", "segredo"), \
+         patch.object(claude_cli.httpx, "AsyncClient", _FakeAsyncClient):
+        saida = await claude_cli.exec_prompt("ola", schema={"type": "object"}, model="sonnet", timeout_s=30)
+    assert saida == '{"acao":"responder","resposta":"oi"}'
+    chamada = _FakeAsyncClient.calls[0]
+    assert chamada["url"] == "http://192.168.0.100:8788/exec"
+    assert chamada["headers"] == {"X-Claude-Token": "segredo"}
+    assert chamada["json"] == {"prompt": "ola", "timeout_s": 30, "schema": {"type": "object"}, "model": "sonnet"}
+
+    _FakeAsyncClient.response = _FakeResponse(401, {"ok": False, "erro": "token inválido: envie o header X-Claude-Token"})
+    with patch.object(claude_cli.settings, "CLAUDE_URL", "http://192.168.0.100:8788"), \
+         patch.object(claude_cli.settings, "CLAUDE_TOKEN", "errado"), \
+         patch.object(claude_cli.httpx, "AsyncClient", _FakeAsyncClient):
+        with pytest.raises(claude_cli.ClaudeCliError) as exc:
+            await claude_cli.exec_prompt("ola")
+    assert "CLAUDE_TOKEN" in str(exc.value)
+
+
 # ----------------------------- base de conhecimento ------------------------- #
 
 @pytest.mark.asyncio

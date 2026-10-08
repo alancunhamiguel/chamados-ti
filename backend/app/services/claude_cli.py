@@ -115,9 +115,10 @@ async def _exec_http(prompt: str, schema: dict | None, model: str, timeout_s: in
         corpo["schema"] = schema
     if model:
         corpo["model"] = model
+    headers = {"X-Claude-Token": settings.CLAUDE_TOKEN.strip()} if settings.CLAUDE_TOKEN.strip() else {}
     try:
         async with httpx.AsyncClient(timeout=timeout_s + 30) as client:
-            r = await client.post(f"{url}/exec", json=corpo)
+            r = await client.post(f"{url}/exec", json=corpo, headers=headers)
     except httpx.HTTPError as exc:
         raise ClaudeCliError(f"Servico do Claude ({url}) inacessivel: {exc}") from exc
     try:
@@ -128,6 +129,8 @@ async def _exec_http(prompt: str, schema: dict | None, model: str, timeout_s: in
         return str(dados.get("resposta", ""))
     erro = f"{dados.get('erro', '')} {dados.get('stderr', '')}".strip()
     logger.error("chamados-claude falhou (HTTP %s): %s", r.status_code, erro[-1500:])
+    if r.status_code == 401 and "token" in erro.lower():
+        raise ClaudeCliError("O servico do Claude exige token: confira CLAUDE_TOKEN no backend/.env (igual ao CLAUDE_SERVER_TOKEN do servidor).")
     raise _mapear_erro(erro or f"HTTP {r.status_code}", "http")
 
 

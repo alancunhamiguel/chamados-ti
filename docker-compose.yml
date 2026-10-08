@@ -43,6 +43,7 @@ services:
     environment:
       - CLAUDE_CONFIG_DIR=/root/.claude-home
       - CLAUDE_SERVER_PORT=8788
+      - CLAUDE_SERVER_TOKEN=${CLAUDE_TOKEN:-}   # mesmo valor de CLAUDE_TOKEN no .env (opcional)
     expose:
       - "8788"
     volumes:
