@@ -99,6 +99,13 @@ export default function TicketDetailPage() {
     refetchInterval: 8000,
   });
 
+  const { data: chat } = useQuery({
+    queryKey: ['chat', id],
+    queryFn: () => api.get(`/tickets/${id}/chat`).then((r) => r.data),
+    enabled: !!id,
+    refetchInterval: 8000,
+  });
+
   const { data: history } = useQuery({
     queryKey: ['history', id],
     queryFn: () => getHistory(id!),
@@ -541,6 +548,45 @@ export default function TicketDetailPage() {
           </div>
           <p className="text-[10px] text-slate-400 mt-2">Ctrl+Enter para enviar rapidamente</p>
         </div>
+      </div>
+
+      {/* Chat dentro do escopo do chamado */}
+      <div className="bg-white rounded-card shadow-card p-6 mb-5">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-sm font-semibold text-slate-600 uppercase tracking-wide">Conversa (Chat)</h2>
+          {chat && chat.length > 0 && (
+            <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide">{chat.length} mensagens</span>
+          )}
+        </div>
+        {chat && chat.length > 0 ? (
+          <div className="space-y-3 max-h-80 overflow-y-auto pr-1">
+            {chat.map((m: any) => (
+              <div key={m.id} className={`flex ${m.sender_id === user?.id ? 'justify-end' : 'justify-start'}`}>
+                <div
+                  className={`max-w-[75%] px-4 py-2.5 rounded-2xl text-sm ${
+                    m.is_system
+                      ? 'bg-surface-100 text-slate-500 italic'
+                      : m.sender_id === user?.id
+                        ? 'bg-primary-500 text-white'
+                        : 'bg-slate-50 border border-surface-200 text-slate-700'
+                  }`}
+                >
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <span className={`font-semibold text-xs ${m.sender_id === user?.id && !m.is_system ? 'text-white/80' : 'text-slate-500'}`}>
+                      {m.is_system ? 'Sistema' : m.sender_name}
+                    </span>
+                  </div>
+                  <p>{m.message}</p>
+                  <p className={`text-[10px] mt-1 text-right ${m.sender_id === user?.id && !m.is_system ? 'text-white/70' : 'text-slate-400'}`}>
+                    {new Date(m.created_at).toLocaleString('pt-BR')}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-slate-400 text-center py-4">Ainda nao ha conversa neste chamado.</p>
+        )}
       </div>
 
       {/* Attachments */}

@@ -62,7 +62,7 @@ const navItems = [
   },
 ];
 
-export default function Sidebar() {
+export default function Sidebar({ open = true }: { open?: boolean }) {
   const location = useLocation();
   const { user, hasRole, updateUserStatus } = useAuth();
   const { hasNewMessages } = useChat();
@@ -94,7 +94,7 @@ export default function Sidebar() {
   };
 
   return (
-    <div className="fixed left-0 top-0 h-full w-64 bg-white flex flex-col z-40" style={{ boxShadow: '12px 0 40px rgba(0, 0, 0, 0.12), 6px 0 20px rgba(0, 102, 255, 0.06), 1px 0 0 #E2E8F0' }}>
+    <div className={`fixed left-0 top-0 h-full w-64 bg-white flex flex-col z-40 transition-transform duration-300 ease-in-out ${open ? 'translate-x-0' : '-translate-x-full'}`} style={{ boxShadow: '12px 0 40px rgba(0, 0, 0, 0.12), 6px 0 20px rgba(0, 102, 255, 0.06), 1px 0 0 #E2E8F0' }}>
       {/* Logo */}
       <div className="px-5 py-5 flex items-center justify-center" style={{ borderBottom: '1px solid #F1F5F9' }}>
         <img src="/logo.png" alt="Grupo FedCorp" className="w-40 h-auto object-contain" />
