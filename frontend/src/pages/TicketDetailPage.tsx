@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getTicket, updateTicketStatus, updateTicketPriority, assignTicket } from '../api/tickets';
-import { getComments, addComment, getHistory } from '../api/comments';
+import { getHistory } from '../api/comments';
 import { getAttachments, uploadAttachment, deleteAttachment, downloadAttachment } from '../api/attachments';
 import { useAuth } from '../contexts/AuthContext';
 import { useChat } from '../contexts/ChatContext';
@@ -72,8 +72,6 @@ export default function TicketDetailPage() {
   const queryClient = useQueryClient();
   const { hasRole, user } = useAuth();
   const { addToast } = useToast();
-  const [comment, setComment] = useState('');
-  const [isInternal, setIsInternal] = useState(false);
   const [showCloseConfirm, setShowCloseConfirm] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editForm, setEditForm] = useState({ title: '', description: '', category: '' });
@@ -91,13 +89,6 @@ export default function TicketDetailPage() {
   useEffect(() => {
     if (id && ticket) addToOpenChats(id, ticket.ticket_number);
   }, [id, ticket, addToOpenChats]);
-
-  const { data: comments } = useQuery({
-    queryKey: ['comments', id],
-    queryFn: () => getComments(id!),
-    enabled: !!id,
-    refetchInterval: 8000,
-  });
 
   const { data: chat } = useQuery({
     queryKey: ['chat', id],
@@ -210,17 +201,6 @@ export default function TicketDetailPage() {
       addToast('success', 'Chamado atualizado!');
     },
     onError: () => addToast('error', 'Erro ao atualizar chamado.'),
-  });
-
-  const commentMutation = useMutation({
-    mutationFn: () => addComment(id!, { message: comment, is_internal: isInternal }),
-    onSuccess: () => {
-      setComment('');
-      setIsInternal(false);
-      queryClient.invalidateQueries({ queryKey: ['comments', id] });
-      addToast('success', 'Comentario adicionado!');
-    },
-    onError: () => addToast('error', 'Erro ao enviar comentario.'),
   });
 
   const startEdit = () => {
@@ -491,62 +471,6 @@ export default function TicketDetailPage() {
               </div>
             </div>
           ))}
-        </div>
-      </div>
-
-      {/* Comments */}
-      <div className="bg-white rounded-card shadow-card p-6 mb-5">
-        <h2 className="text-sm font-semibold text-slate-600 uppercase tracking-wide mb-4">Comentarios</h2>
-        <div className="space-y-3 mb-5">
-          {comments?.map((c: any) => (
-            <div key={c.id} className={`p-4 rounded-xl ${c.is_internal ? 'bg-amber-50 border border-amber-200' : 'bg-slate-50'}`}>
-              <div className="flex justify-between items-center mb-1.5">
-                <div className="flex items-center gap-2">
-                  <div className="w-6 h-6 rounded-full bg-slate-400 flex items-center justify-center text-white text-[10px] font-bold">
-                    {c.user?.name?.charAt(0)?.toUpperCase() || 'U'}
-                  </div>
-                  <span className="font-semibold text-sm text-slate-700">{c.user?.name}</span>
-                </div>
-                <span className="text-xs text-slate-400">{new Date(c.created_at).toLocaleString('pt-BR')}</span>
-              </div>
-              <p className="text-sm text-slate-600 ml-8">{c.message}</p>
-              {c.is_internal && (
-                <span className="text-[10px] font-semibold text-amber-600 uppercase tracking-wide ml-8">Comentario interno</span>
-              )}
-            </div>
-          ))}
-        </div>
-
-        <div className="border-t border-surface-200 pt-4">
-          <textarea
-            value={comment}
-            onChange={(e) => setComment(e.target.value)}
-            placeholder="Adicionar comentario..."
-            rows={3}
-            onKeyDown={(e) => { if (e.key === 'Enter' && e.ctrlKey) commentMutation.mutate(); }}
-            className="w-full px-4 py-2.5 border border-surface-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none mb-3"
-          />
-          <div className="flex justify-between items-center">
-            {(hasRole('technician') || hasRole('admin')) && (
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={isInternal}
-                  onChange={(e) => setIsInternal(e.target.checked)}
-                  className="w-4 h-4 text-primary-500 rounded border-surface-200 focus:ring-primary-500"
-                />
-                <span className="text-sm text-slate-500">Comentario interno</span>
-              </label>
-            )}
-            <button
-              onClick={() => commentMutation.mutate()}
-              disabled={!comment.trim() || commentMutation.isPending}
-              className="bg-primary-500 text-white px-5 py-2 rounded-lg text-sm font-semibold hover:bg-primary-600 disabled:opacity-50 transition-all shadow-sm"
-            >
-              {commentMutation.isPending ? 'Enviando...' : 'Enviar'}
-            </button>
-          </div>
-          <p className="text-[10px] text-slate-400 mt-2">Ctrl+Enter para enviar rapidamente</p>
         </div>
       </div>
 

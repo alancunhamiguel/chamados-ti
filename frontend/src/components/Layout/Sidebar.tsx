@@ -62,7 +62,7 @@ const navItems = [
   },
 ];
 
-export default function Sidebar({ open = true }: { open?: boolean }) {
+export default function Sidebar({ open = true, onToggle }: { open?: boolean; onToggle: () => void }) {
   const location = useLocation();
   const { user, hasRole, updateUserStatus } = useAuth();
   const { hasNewMessages } = useChat();
@@ -94,14 +94,25 @@ export default function Sidebar({ open = true }: { open?: boolean }) {
   };
 
   return (
-    <div className={`fixed left-0 top-0 h-full w-64 bg-white flex flex-col z-40 transition-transform duration-300 ease-in-out ${open ? 'translate-x-0' : '-translate-x-full'}`} style={{ boxShadow: '12px 0 40px rgba(0, 0, 0, 0.12), 6px 0 20px rgba(0, 102, 255, 0.06), 1px 0 0 #E2E8F0' }}>
-      {/* Logo */}
-      <div className="px-5 py-5 flex items-center justify-center" style={{ borderBottom: '1px solid #F1F5F9' }}>
-        <img src="/logo.png" alt="Grupo FedCorp" className="w-40 h-auto object-contain" />
+    <div className={`fixed left-0 top-0 h-full bg-white flex flex-col z-40 transition-all duration-300 ease-in-out ${open ? 'w-64' : 'w-16'}`} style={{ boxShadow: '12px 0 40px rgba(0, 0, 0, 0.12), 6px 0 20px rgba(0, 102, 255, 0.06), 1px 0 0 #E2E8F0' }}>
+      {/* Topo: logo (quando aberta) + seta para abrir/fechar */}
+      <div className="flex items-center justify-between px-3 py-4" style={{ borderBottom: '1px solid #F1F5F9' }}>
+        {open && (
+          <img src="/logo.png" alt="Grupo FedCorp" className="w-40 h-auto object-contain" />
+        )}
+        <button
+          onClick={onToggle}
+          title={open ? 'Recolher menu' : 'Expandir menu'}
+          className={`flex items-center justify-center w-9 h-9 rounded-full hover:bg-slate-50 text-slate-400 hover:text-primary-500 transition-all ${open ? 'ml-auto' : 'mx-auto flex-shrink-0'}`}
+        >
+          <svg className={`w-4 h-4 transition-transform duration-300 ${open ? '' : 'rotate-180'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M15 19l-7-7 7-7" />
+          </svg>
+        </button>
       </div>
 
-      {/* Navigation */}
-      <nav className="flex-1 px-3 py-4 space-y-1">
+      {/* Navegacao */}
+      <nav className={`flex-1 ${open ? 'px-3 py-4 space-y-1' : 'px-2 py-4 space-y-2'}`}>
         {filteredNavItems.map((item) => {
           const isActive = location.pathname === item.path ||
             (item.path === '/tickets' && location.pathname.startsWith('/tickets'));
@@ -109,29 +120,37 @@ export default function Sidebar({ open = true }: { open?: boolean }) {
             <Link
               key={item.path}
               to={item.path}
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
+              title={!open ? item.label : undefined}
+              className={`flex items-center rounded-xl text-sm font-medium transition-all ${
                 isActive
                   ? 'bg-primary-50 text-primary-500 font-semibold shadow-sm'
                   : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'
-              }`}
+              } ${open ? 'gap-3 px-3 py-2.5' : 'justify-center relative py-3'}`}
               style={isActive ? { border: '1.5px solid rgba(0, 102, 255, 0.15)', boxShadow: '0 1px 8px rgba(0, 102, 255, 0.08)' } : { border: '1.5px solid transparent' }}
             >
               <span className={isActive ? 'text-primary-500' : 'text-slate-400'}>
                 {item.icon}
               </span>
-              {item.label}
-              {item.path === '/tickets' && hasNewMessages && (
-                <span className="ml-auto w-5 h-5 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center animate-pulse">
-                  !
-                </span>
+              {open && (
+                <>
+                  {item.label}
+                  {item.path === '/tickets' && hasNewMessages && (
+                    <span className="ml-auto w-5 h-5 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center animate-pulse">
+                      !
+                    </span>
+                  )}
+                </>
+              )}
+              {!open && item.path === '/tickets' && hasNewMessages && (
+                <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-red-500 rounded-full animate-pulse"></span>
               )}
             </Link>
           );
         })}
       </nav>
 
-      {/* Team Status (employees only) */}
-      {!isStaff && team.length > 0 && (
+      {/* Team Status (colaborador) - apenas com sidebar aberta */}
+      {open && !isStaff && team.length > 0 && (
         <div className="px-4 py-3 border-t border-surface-200">
           <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-2">Equipe TI</p>
           <div className="space-y-1.5">
@@ -149,64 +168,71 @@ export default function Sidebar({ open = true }: { open?: boolean }) {
         </div>
       )}
 
-      {/* User Card */}
-      <div className="px-3 py-3" style={{ borderTop: '1px solid #F1F5F9' }}>
-        <div className="relative">
-          {isStaff ? (
-            <button
-              onClick={() => setShowStatusMenu(!showStatusMenu)}
-              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-slate-50 transition-colors"
-            >
-              <div className="w-9 h-9 rounded-full bg-slate-600 flex items-center justify-center text-white text-sm font-semibold flex-shrink-0">
-                {user?.name?.charAt(0)?.toUpperCase() || 'U'}
-              </div>
-              <div className="flex-1 text-left min-w-0">
-                <p className="text-sm font-semibold text-slate-700 truncate">{user?.name}</p>
-                <div className="flex items-center gap-1.5">
-                  <span className={`w-1.5 h-1.5 rounded-full ${currentStatus?.color || 'bg-gray-300'}`}></span>
-                  <p className="text-[11px] text-slate-400">{currentStatus?.label || 'Offline'}</p>
+      {/* Cartao do usuario */}
+      {open ? (
+        <div className="px-3 py-3" style={{ borderTop: '1px solid #F1F5F9' }}>
+          <div className="relative">
+            {isStaff ? (
+              <button
+                onClick={() => setShowStatusMenu(!showStatusMenu)}
+                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-slate-50 transition-colors"
+              >
+                <div className="w-9 h-9 rounded-full bg-slate-600 flex items-center justify-center text-white text-sm font-semibold flex-shrink-0">
+                  {user?.name?.charAt(0)?.toUpperCase() || 'U'}
+                </div>
+                <div className="flex-1 text-left min-w-0">
+                  <p className="text-sm font-semibold text-slate-700 truncate">{user?.name}</p>
+                  <div className="flex items-center gap-1.5">
+                    <span className={`w-1.5 h-1.5 rounded-full ${currentStatus?.color || 'bg-gray-300'}`}></span>
+                    <p className="text-[11px] text-slate-400">{currentStatus?.label || 'Offline'}</p>
+                  </div>
+                </div>
+                <svg className={`w-4 h-4 text-slate-400 transition-transform ${showStatusMenu ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+            ) : (
+              <div className="flex items-center gap-3 px-3 py-2.5">
+                <div className="w-9 h-9 rounded-full bg-slate-600 flex items-center justify-center text-white text-sm font-semibold flex-shrink-0">
+                  {user?.name?.charAt(0)?.toUpperCase() || 'U'}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-slate-700 truncate">{user?.name}</p>
+                  <p className="text-[11px] text-slate-400 capitalize">{user?.role}</p>
                 </div>
               </div>
-              <svg className={`w-4 h-4 text-slate-400 transition-transform ${showStatusMenu ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-              </svg>
-            </button>
-          ) : (
-            <div className="flex items-center gap-3 px-3 py-2.5">
-              <div className="w-9 h-9 rounded-full bg-slate-600 flex items-center justify-center text-white text-sm font-semibold flex-shrink-0">
-                {user?.name?.charAt(0)?.toUpperCase() || 'U'}
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-slate-700 truncate">{user?.name}</p>
-                <p className="text-[11px] text-slate-400 capitalize">{user?.role}</p>
-              </div>
-            </div>
-          )}
+            )}
 
-          {/* Status Dropdown */}
-          {showStatusMenu && (
-            <div className="absolute bottom-full left-0 right-0 mb-2 bg-white rounded-xl shadow-lg border border-surface-200 overflow-hidden z-50">
-              {statusOptions.map((opt) => (
-                <button
-                  key={opt.value}
-                  onClick={() => handleChangeStatus(opt.value)}
-                  className={`w-full px-4 py-2.5 text-left text-sm hover:bg-slate-50 flex items-center gap-2.5 transition-colors ${
-                    user?.online_status === opt.value ? 'bg-primary-50 text-primary-600 font-medium' : 'text-slate-600'
-                  }`}
-                >
-                  <span className={`w-2.5 h-2.5 rounded-full ${opt.color}`}></span>
-                  {opt.label}
-                  {user?.online_status === opt.value && (
-                    <svg className="w-4 h-4 ml-auto text-primary-500" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                    </svg>
-                  )}
-                </button>
-              ))}
-            </div>
-          )}
+            {showStatusMenu && (
+              <div className="absolute bottom-full left-0 right-0 mb-2 bg-white rounded-xl shadow-lg border border-surface-200 overflow-hidden z-50">
+                {statusOptions.map((opt) => (
+                  <button
+                    key={opt.value}
+                    onClick={() => handleChangeStatus(opt.value)}
+                    className={`w-full px-4 py-2.5 text-left text-sm hover:bg-slate-50 flex items-center gap-2.5 transition-colors ${
+                      user?.online_status === opt.value ? 'bg-primary-50 text-primary-600 font-medium' : 'text-slate-600'
+                    }`}
+                  >
+                    <span className={`w-2.5 h-2.5 rounded-full ${opt.color}`}></span>
+                    {opt.label}
+                    {user?.online_status === opt.value && (
+                      <svg className="w-4 h-4 ml-auto text-primary-500" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                      </svg>
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
-      </div>
+      ) : (
+        <div className="px-2 py-3" style={{ borderTop: '1px solid #F1F5F9' }}>
+          <div className="w-10 h-10 mx-auto rounded-full bg-slate-600 flex items-center justify-center text-white text-sm font-semibold">
+            {user?.name?.charAt(0)?.toUpperCase() || 'U'}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
