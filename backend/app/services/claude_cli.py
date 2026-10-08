@@ -46,6 +46,52 @@ def _url() -> str:
     return settings.CLAUDE_URL.strip().rstrip("/")
 
 
+# Onde o Claude Code costuma ficar no Windows quando nao esta no PATH do processo:
+# app Claude (desktop) traz o CLI embutido; instalador nativo; npm global.
+_WINDOWS_GLOBS = (
+    r"%LOCALAPPDATA%\Packages\Claude_*\LocalCache\Roaming\Claude\claude-code\*\*\claude.exe",
+    r"%LOCALAPPDATA%\Programs\claude\claude.exe",
+    r"%USERPROFILE%\.local\bin\claude.exe",
+    r"%APPDATA%\npm\claude.cmd",
+)
+_POSIX_GLOBS = (
+    "~/.local/bin/claude",
+    "/usr/local/bin/claude",
+    "~/.npm-global/bin/claude",
+)
+
+
+def find_claude_bin() -> str | None:
+    """Caminho do CLI: CLAUDE_BIN (nome no PATH ou caminho completo) ou locais conhecidos.
+
+    Quando ha mais de uma versao embutida no app Claude, pega a mais recente
+    (ordenacao do caminho, que contem a versao).
+    """
+    import glob
+
+    achado = shutil.which(settings.CLAUDE_BIN)
+    if achado:
+        return achado
+    padroes = _WINDOWS_GLOBS if os.name == "nt" else _POSIX_GLOBS
+    for padrao in padroes:
+        candidatos = sorted(glob.glob(os.path.expanduser(os.path.expandvars(padrao))), reverse=True)
+        if candidatos:
+            return candidatos[0]
+    return None
+
+
+_semaforo: asyncio.Semaphore | None = None
+
+
+def _limite_concorrencia() -> asyncio.Semaphore:
+    # Cada mensagem vira um processo `claude.exe` (~10 s); limita quantos rodam
+    # ao mesmo tempo para nao derrubar o PC que hospeda o sistema.
+    global _semaforo
+    if _semaforo is None:
+        _semaforo = asyncio.Semaphore(max(1, settings.BOT_CLI_CONCURRENCY))
+    return _semaforo
+
+
 # --------------------------------------------------------------------------- #
 # status
 # --------------------------------------------------------------------------- #
@@ -69,9 +115,9 @@ async def status() -> dict[str, Any]:
         except Exception as exc:  # rede, DNS, JSON invalido
             return {"modo": "http", "servico": url, "instalado": False, "logado": False, "detalhe": f"servico {url} inacessivel: {exc}"}
 
-    binario = shutil.which(settings.CLAUDE_BIN)
+    binario = find_claude_bin()
     if not binario:
-        return {"modo": "local", "instalado": False, "logado": False, "detalhe": f"binario '{settings.CLAUDE_BIN}' nao encontrado no PATH"}
+        return {"modo": "local", "instalado": False, "logado": False, "detalhe": f"Claude Code nao encontrado nesta maquina (CLAUDE_BIN='{settings.CLAUDE_BIN}')"}
     env = dict(os.environ)
     if settings.CLAUDE_CONFIG_DIR:
         env["CLAUDE_CONFIG_DIR"] = settings.CLAUDE_CONFIG_DIR
@@ -85,10 +131,10 @@ async def status() -> dict[str, Any]:
         except json.JSONDecodeError:
             dados = {}
         logado = bool(dados.get("loggedIn"))
-        detalhe = f"{dados.get('authMethod', '?')} / plano {dados.get('subscriptionType', '?')}" if logado else "nao autenticado"
-        return {"modo": "local", "instalado": True, "logado": logado, "detalhe": detalhe[:200]}
+        detalhe = f"{dados.get('authMethod', '?')} / plano {dados.get('subscriptionType', '?')}" if logado else "nao autenticado: rode `claude login` nesta maquina com a conta do bot"
+        return {"modo": "local", "instalado": True, "logado": logado, "detalhe": detalhe[:200], "binario": binario}
     except asyncio.TimeoutError:
-        return {"modo": "local", "instalado": True, "logado": False, "detalhe": "claude auth status nao respondeu"}
+        return {"modo": "local", "instalado": True, "logado": False, "detalhe": "claude auth status nao respondeu", "binario": binario}
 
 
 # --------------------------------------------------------------------------- #
@@ -135,10 +181,11 @@ async def _exec_http(prompt: str, schema: dict | None, model: str, timeout_s: in
 
 
 async def _exec_local(prompt: str, schema: dict | None, model: str, timeout_s: int) -> str:
-    binario = shutil.which(settings.CLAUDE_BIN)
+    binario = find_claude_bin()
     if not binario:
         raise ClaudeCliError(
-            f"Claude Code CLI nao encontrado ('{settings.CLAUDE_BIN}'). Instale com `npm i -g @anthropic-ai/claude-code` ou defina CLAUDE_URL."
+            f"Claude Code nao encontrado nesta maquina (CLAUDE_BIN='{settings.CLAUDE_BIN}'). "
+            "Instale o Claude Code, aponte CLAUDE_BIN para o claude.exe ou defina CLAUDE_URL."
         )
     cmd = [binario, "-p", "--output-format", "json", "--tools", "", "--permission-prompts", "none", "--no-session-persistence"]
     if model:
@@ -149,15 +196,16 @@ async def _exec_local(prompt: str, schema: dict | None, model: str, timeout_s: i
     if settings.CLAUDE_CONFIG_DIR:
         env["CLAUDE_CONFIG_DIR"] = settings.CLAUDE_CONFIG_DIR
 
-    with tempfile.TemporaryDirectory(prefix="claude-") as tmp:
-        proc = await asyncio.create_subprocess_exec(
-            *cmd, stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE, env=env, cwd=tmp,
-        )
-        try:
-            stdout_b, stderr_b = await asyncio.wait_for(proc.communicate(prompt.encode("utf-8")), timeout=timeout_s)
-        except asyncio.TimeoutError:
-            proc.kill()
-            raise ClaudeCliError(f"Claude Code CLI nao respondeu em {timeout_s}s")
+    async with _limite_concorrencia():
+        with tempfile.TemporaryDirectory(prefix="claude-") as tmp:
+            proc = await asyncio.create_subprocess_exec(
+                *cmd, stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE, env=env, cwd=tmp,
+            )
+            try:
+                stdout_b, stderr_b = await asyncio.wait_for(proc.communicate(prompt.encode("utf-8")), timeout=timeout_s)
+            except asyncio.TimeoutError:
+                proc.kill()
+                raise ClaudeCliError(f"Claude Code CLI nao respondeu em {timeout_s}s")
 
     stdout = stdout_b.decode("utf-8", errors="replace")
     stderr = stderr_b.decode("utf-8", errors="replace")

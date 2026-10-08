@@ -206,10 +206,11 @@ VITE_API_URL=http://localhost:8000/api
 | `BOT_FALLBACKS` | `true` | Provedor `api`: se o modelo recusar por politica, a API tenta um modelo alternativo. |
 | `CLAUDE_URL` | (vazio) | URL do `claude_server.js` (conteiner `chamados-claude`: `http://chamados-claude:8788`, ja injetado pelo compose). |
 | `CLAUDE_TOKEN` | (vazio) | Header `X-Claude-Token` enviado ao `claude_server.js` quando ele exige (`CLAUDE_SERVER_TOKEN`). Obrigatorio ao usar o `fedhub-claude` pela rede. |
-| `CLAUDE_BIN` | `claude` | Modo local do CLI (sem `CLAUDE_URL`): binario do Claude Code. |
+| `CLAUDE_BIN` | `claude` | Modo local do CLI (sem `CLAUDE_URL`): nome no PATH ou caminho completo do `claude.exe`. Se nao estiver no PATH, o backend procura nos locais padrao (app Claude, instalador, npm). |
 | `CLAUDE_CONFIG_DIR` | (vazio) | Modo local: pasta com o `.credentials.json` da conta do bot. |
 | `BOT_CLI_MODEL` | (vazio) | Modelo no CLI (`sonnet`, `opus`...). Vazio = padrao da assinatura. |
 | `BOT_CLI_TIMEOUT` | `120` | Segundos por chamada ao CLI. |
+| `BOT_CLI_CONCURRENCY` | `3` | Modo local: quantos processos `claude` podem rodar ao mesmo tempo. |
 
 Credenciais do conteiner `chamados-claude`: copie `~/.claude/.credentials.json` de uma sessao `claude login`
 feita com a conta do chatbot para `./claude_home/` (git-ignored). Sem esse arquivo o status do bot mostra

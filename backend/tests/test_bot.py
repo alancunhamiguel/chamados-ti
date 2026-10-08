@@ -136,6 +136,34 @@ def test_parse_cli_output_fallbacks():
     assert bot_service._parse_cli_output('{"acao": "formatar", "resposta": "x"}')["acao"] == "responder"
 
 
+def test_find_claude_bin_falls_back_to_known_locations(tmp_path):
+    exe = tmp_path / "claude.exe"
+    exe.write_bytes(b"")
+    with patch.object(claude_cli.shutil, "which", return_value=None), \
+         patch.object(claude_cli, "_WINDOWS_GLOBS", (str(tmp_path / "claude.exe"),)), \
+         patch.object(claude_cli, "_POSIX_GLOBS", (str(tmp_path / "claude.exe"),)):
+        assert claude_cli.find_claude_bin() == str(exe)
+    with patch.object(claude_cli.shutil, "which", return_value=None), \
+         patch.object(claude_cli, "_WINDOWS_GLOBS", ()), \
+         patch.object(claude_cli, "_POSIX_GLOBS", ()):
+        assert claude_cli.find_claude_bin() is None
+
+
+def test_provider_auto_picks_local_cli_when_claude_code_is_installed():
+    with patch.object(bot_service.settings, "BOT_PROVIDER", "auto"), \
+         patch.object(bot_service.settings, "ANTHROPIC_API_KEY", ""), \
+         patch.object(bot_service.settings, "CLAUDE_URL", ""), \
+         patch.object(bot_service.settings, "CLAUDE_CONFIG_DIR", ""):
+        with patch.object(claude_cli, "find_claude_bin", return_value=r"C:\x\claude.exe"):
+            assert bot_service.provider() == "claude_cli"
+        with patch.object(claude_cli, "find_claude_bin", return_value=None):
+            assert bot_service.provider() is None
+    with patch.object(bot_service.settings, "BOT_PROVIDER", "auto"), \
+         patch.object(bot_service.settings, "ANTHROPIC_API_KEY", "sk-ant-x"), \
+         patch.object(claude_cli, "find_claude_bin", return_value=r"C:\x\claude.exe"):
+        assert bot_service.provider() == "api"  # chave tem preferencia
+
+
 def test_cli_error_mapping():
     assert "sem login" in str(claude_cli._mapear_erro("claude falhou (not logged in)", "http"))
     assert "Limite de uso" in str(claude_cli._mapear_erro("usage limit reached", "http"))

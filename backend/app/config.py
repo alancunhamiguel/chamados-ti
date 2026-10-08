@@ -56,6 +56,7 @@ class Settings(BaseSettings):
     CLAUDE_CONFIG_DIR: str = ""         # modo local: pasta com o .credentials.json da conta do bot
     BOT_CLI_MODEL: str = ""             # modelo no CLI ("" = padrao do plano; ex.: sonnet, opus)
     BOT_CLI_TIMEOUT: int = 120          # segundos por chamada ao CLI
+    BOT_CLI_CONCURRENCY: int = 3        # processos `claude` simultaneos no modo local
 
     class Config:
         env_file = _resolve_env_file()

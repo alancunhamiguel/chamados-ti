@@ -72,13 +72,13 @@ PROVIDER_CLI = "claude_cli"
 def provider() -> str | None:
     """Provedor efetivo: "api", "claude_cli" ou None (bot desativado).
 
-    BOT_PROVIDER=auto: API se houver ANTHROPIC_API_KEY, senao CLI se houver
-    CLAUDE_URL ou CLAUDE_CONFIG_DIR. Forcar `claude_cli` permite o modo local
-    com o `claude` do PATH.
+    BOT_PROVIDER=auto: API se houver ANTHROPIC_API_KEY; senao CLI se houver
+    CLAUDE_URL, CLAUDE_CONFIG_DIR ou um Claude Code instalado nesta maquina
+    (o caso "PC que ja tem o Claude Code logado": zero configuracao).
     """
     escolha = (settings.BOT_PROVIDER or "auto").strip().lower()
     tem_chave = bool(settings.ANTHROPIC_API_KEY.strip())
-    tem_cli = bool(settings.CLAUDE_URL.strip() or settings.CLAUDE_CONFIG_DIR.strip())
+    tem_cli = bool(settings.CLAUDE_URL.strip() or settings.CLAUDE_CONFIG_DIR.strip()) or claude_cli.find_claude_bin() is not None
     if escolha == PROVIDER_API:
         return PROVIDER_API if tem_chave else None
     if escolha == PROVIDER_CLI:

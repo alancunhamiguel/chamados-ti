@@ -87,6 +87,22 @@ BOT_MODEL=claude-opus-5-5
 BOT_EFFORT=medium
 ```
 
+**Opção D (a mais simples): rodar o backend num PC que já tem o Claude Code logado**
+
+Se o sistema vai rodar numa máquina com o Claude Code instalado e conectado à conta do chatbot, não há
+nada para configurar: com `BOT_PROVIDER=auto` e sem chave de API, o backend encontra o `claude.exe`
+sozinho (PATH, app Claude, instalador nativo ou npm), roda `claude -p --tools "" --json-schema` a cada
+mensagem e captura a resposta. Validado em 08/10/2026 com o Claude Code 2.1.293: cerca de 10 s por
+resposta. Pontos de atenção:
+
+- O backend precisa rodar **direto no PC** (`python run.py` ou `uvicorn`), não dentro do Docker, e com o
+  mesmo usuário do Windows que fez o `claude login`. Para manter o backend no Docker, rode
+  `node claude/claude_server.js` no PC e use `CLAUDE_URL=http://host.docker.internal:8788`.
+- Em *Admin > SuporteBot* o status deve mostrar "Claude Code (claude.ai / plano team)". Se mostrar
+  "nao autenticado", rode `claude login` nesse PC com a conta do bot.
+- Se o binário estiver em outro lugar, aponte `CLAUDE_BIN=<caminho completo do claude.exe>`.
+- `BOT_CLI_CONCURRENCY` (padrão 3) limita quantos processos `claude` rodam ao mesmo tempo.
+
 **Opção B: assinatura Claude do Grupo via contêiner `chamados-claude` (padrão do FedHub)**
 
 Mesma receita do `fedhub-claude` (FedHub-Backend, ADR-0052): um contêiner com o Claude Code CLI
