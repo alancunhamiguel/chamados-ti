@@ -1,4 +1,4 @@
-"""SuporteBot: assistente de TI dentro do chat, respondido pela Claude (API da Anthropic).
+"""SuporteBot: assistente de TI dentro do chat, respondido pela Claude.
 
 Como funciona:
 1. O historico recente do usuario (tabela bot_conversations) vira o contexto da
@@ -7,10 +7,18 @@ Como funciona:
    no prompt de sistema. E assim que o bot vai "aprendendo" com o tempo.
 3. O bot tem ferramentas para consultar chamados resolvidos (solucoes antigas),
    listar os chamados do usuario e abrir um chamado quando nao resolve sozinho.
+
+Dois provedores (BOT_PROVIDER):
+- `api`: API da Anthropic por token (SDK `anthropic`), com tool use nativo.
+- `claude_cli`: Claude Code CLI da assinatura do Grupo, via conteiner
+  `chamados-claude` (claude_server.js, mesmo padrao do fedhub-claude) ou binario
+  local. O CLI roda com `--tools ""`, entao as ferramentas sao emuladas: o modelo
+  devolve JSON tipado dizendo qual acao quer, o backend executa e reenvia o resultado.
 """
 
 import json
 import logging
+import time
 import uuid
 from datetime import datetime, timezone
 
@@ -24,6 +32,7 @@ from app.models.bot_conversation import BotConversation, BotKnowledge
 from app.models.comment import TicketComment
 from app.models.ticket import Ticket, Sector
 from app.models.user import User
+from app.services import claude_cli
 
 settings = get_settings()
 logger = logging.getLogger(__name__)
@@ -56,14 +65,72 @@ class BotUnavailable(Exception):
 
 _client: anthropic.AsyncAnthropic | None = None
 
+PROVIDER_API = "api"
+PROVIDER_CLI = "claude_cli"
+
+
+def provider() -> str | None:
+    """Provedor efetivo: "api", "claude_cli" ou None (bot desativado).
+
+    BOT_PROVIDER=auto: API se houver ANTHROPIC_API_KEY, senao CLI se houver
+    CLAUDE_URL ou CLAUDE_CONFIG_DIR. Forcar `claude_cli` permite o modo local
+    com o `claude` do PATH.
+    """
+    escolha = (settings.BOT_PROVIDER or "auto").strip().lower()
+    tem_chave = bool(settings.ANTHROPIC_API_KEY.strip())
+    tem_cli = bool(settings.CLAUDE_URL.strip() or settings.CLAUDE_CONFIG_DIR.strip())
+    if escolha == PROVIDER_API:
+        return PROVIDER_API if tem_chave else None
+    if escolha == PROVIDER_CLI:
+        return PROVIDER_CLI
+    if tem_chave:
+        return PROVIDER_API
+    if tem_cli:
+        return PROVIDER_CLI
+    return None
+
 
 def is_configured() -> bool:
-    return bool(settings.ANTHROPIC_API_KEY)
+    return provider() is not None
+
+
+_cli_status_cache: dict = {"at": 0.0, "data": None}
+CLI_STATUS_TTL_S = 30
+
+
+async def _cli_status_cached() -> dict:
+    agora = time.monotonic()
+    if _cli_status_cache["data"] is None or agora - _cli_status_cache["at"] > CLI_STATUS_TTL_S:
+        _cli_status_cache["data"] = await claude_cli.status()
+        _cli_status_cache["at"] = agora
+    return _cli_status_cache["data"]
+
+
+async def get_status(db: AsyncSession) -> dict:
+    """Diagnostico para GET /api/bot/status (nunca expoe chave/token)."""
+    prov = provider()
+    articles = await list_knowledge(db, only_active=True)
+    info = {
+        "configured": prov is not None,
+        "provider": prov,
+        "model": "",
+        "detail": "Defina ANTHROPIC_API_KEY (API) ou CLAUDE_URL (conteiner chamados-claude) no backend/.env",
+        "knowledge_articles": len(articles),
+    }
+    if prov == PROVIDER_API:
+        info["model"] = settings.BOT_MODEL
+        info["detail"] = "API da Anthropic"
+    elif prov == PROVIDER_CLI:
+        st = await _cli_status_cached()
+        info["model"] = settings.BOT_CLI_MODEL or "padrao da assinatura"
+        info["configured"] = bool(st.get("logado"))
+        info["detail"] = f"Claude Code ({st.get('detalhe', '?')})" if st.get("logado") else f"Claude Code sem login: {st.get('detalhe', '?')}"
+    return info
 
 
 def _get_client() -> anthropic.AsyncAnthropic:
     global _client
-    if not is_configured():
+    if not settings.ANTHROPIC_API_KEY:
         raise BotNotConfigured()
     if _client is None:
         _client = anthropic.AsyncAnthropic(
@@ -495,20 +562,159 @@ async def _call_claude(db: AsyncSession, user: User, system: list[dict], message
     return "Nao consegui concluir a consulta agora. Tente novamente ou abra um chamado para a equipe de TI."
 
 
+# --------------------------------------------------------------------------- #
+# Provedor claude_cli: Claude Code CLI (assinatura), sem ferramentas nativas.
+# O modelo devolve JSON tipado (--json-schema) dizendo qual acao quer; o backend
+# executa e reenvia o prompt com o resultado, ate receber "responder".
+# --------------------------------------------------------------------------- #
+
+CLI_ACOES = ["responder", "buscar_chamados_resolvidos", "meus_chamados", "abrir_chamado"]
+
+# Sem "$schema" nem palavras fora do vocabulario: o validador do CLI e estrito
+# (licao do FedHub, ia_client._claude_http).
+CLI_SCHEMA: dict = {
+    "type": "object",
+    "properties": {
+        "acao": {"type": "string", "enum": CLI_ACOES},
+        "resposta": {"type": "string", "description": "Texto final para o usuario quando acao=responder; vazio nas demais."},
+        "termo": {"type": "string", "description": "Palavra-chave para buscar_chamados_resolvidos."},
+        "chamado": {
+            "type": "object",
+            "properties": {
+                "titulo": {"type": "string"},
+                "descricao": {"type": "string"},
+                "prioridade": {"type": "string", "enum": ["low", "medium", "high", "critical"]},
+                "categoria": {"type": "string"},
+            },
+            "required": ["titulo", "descricao", "prioridade"],
+        },
+    },
+    "required": ["acao", "resposta"],
+}
+
+CLI_TOOLS_TEXT = """## Formato de resposta (OBRIGATORIO)
+Responda SEMPRE com um unico JSON, sem texto fora dele:
+{"acao": "...", "resposta": "...", "termo": "...", "chamado": {"titulo": "...", "descricao": "...", "prioridade": "...", "categoria": "..."}}
+
+Acoes:
+- "responder": resposta final ao usuario em "resposta" (texto do chat, nas regras acima).
+- "buscar_chamados_resolvidos": consulta chamados ja resolvidos cujo titulo/categoria contenha "termo" e devolve as respostas publicas da equipe de TI. Use antes de responder problemas recorrentes.
+- "meus_chamados": lista os chamados em aberto do usuario desta conversa.
+- "abrir_chamado": abre um chamado em nome do usuario com os dados em "chamado" (prioridade: low = incomodo pequeno; medium = padrao; high = impede o trabalho de uma pessoa; critical = impede varias pessoas ou um setor). SOMENTE depois que o usuario confirmar explicitamente.
+
+Quando usar uma acao diferente de "responder", deixe "resposta" vazia. O sistema executa a acao e reenvia este prompt com o resultado na secao RESULTADOS DE FERRAMENTAS; ai responda ao usuario com "acao": "responder". Nunca repita uma acao que ja aparece nos resultados.
+"""
+
+
+def _build_cli_prompt(articles: list[BotKnowledge], user: User, history_msgs: list[dict], message: str, tool_results: list[str]) -> str:
+    partes = [SYSTEM_BASE, _knowledge_block(articles), "", _user_block(user), "", CLI_TOOLS_TEXT, "## Conversa ate agora"]
+    if history_msgs:
+        for m in history_msgs:
+            rotulo = "Usuario" if m["role"] == "user" else "SuporteBot"
+            partes.append(f"{rotulo}: {m['content']}")
+    else:
+        partes.append("(primeira mensagem desta conversa)")
+    partes += ["", "## Nova mensagem do usuario", message]
+    if tool_results:
+        partes += ["", "## RESULTADOS DE FERRAMENTAS (desta rodada)"] + tool_results
+        partes.append("\nAgora responda ao usuario com \"acao\": \"responder\".")
+    return "\n".join(partes)
+
+
+def _parse_cli_output(texto: str) -> dict:
+    """JSON validado pelo CLI; se vier texto solto, vira resposta direta."""
+    texto = (texto or "").strip()
+    try:
+        dados = json.loads(texto)
+    except (json.JSONDecodeError, TypeError):
+        ini, fim = texto.find("{"), texto.rfind("}")
+        dados = None
+        if ini != -1 and fim > ini:
+            try:
+                dados = json.loads(texto[ini:fim + 1])
+            except json.JSONDecodeError:
+                dados = None
+        if dados is None:
+            return {"acao": "responder", "resposta": texto}
+    if not isinstance(dados, dict):
+        return {"acao": "responder", "resposta": texto}
+    if dados.get("acao") not in CLI_ACOES:
+        dados["acao"] = "responder"
+    return dados
+
+
+def _cli_action_args(dados: dict) -> dict:
+    acao = dados.get("acao")
+    if acao == "buscar_chamados_resolvidos":
+        return {"termo": str(dados.get("termo") or "")}
+    if acao == "abrir_chamado":
+        chamado = dados.get("chamado") if isinstance(dados.get("chamado"), dict) else {}
+        return {
+            "titulo": chamado.get("titulo") or "",
+            "descricao": chamado.get("descricao") or "",
+            "prioridade": chamado.get("prioridade") or "medium",
+            "categoria": chamado.get("categoria") or None,
+        }
+    return {}
+
+
+async def _call_claude_cli(db: AsyncSession, user: User, articles: list[BotKnowledge], history_msgs: list[dict], message: str) -> str:
+    """Loop de ferramentas emuladas sobre `claude -p --json-schema`. Levanta ClaudeCliError."""
+    tool_results: list[str] = []
+    executadas: set[str] = set()
+
+    for _ in range(MAX_TOOL_ROUNDS):
+        prompt = _build_cli_prompt(articles, user, history_msgs, message, tool_results)
+        saida = await claude_cli.exec_prompt(prompt, schema=CLI_SCHEMA)
+        dados = _parse_cli_output(saida)
+        acao = dados["acao"]
+
+        if acao == "responder":
+            texto = str(dados.get("resposta") or "").strip()
+            return texto or "Nao consegui gerar uma resposta. Pode reformular a pergunta?"
+
+        args = _cli_action_args(dados)
+        chave = f"{acao}:{json.dumps(args, sort_keys=True, ensure_ascii=False)}"
+        if chave in executadas:
+            tool_results.append(f"[{acao}] ja executada nesta rodada; use o resultado acima e responda.")
+            continue
+        executadas.add(chave)
+        logger.info("SuporteBot (cli) acao %s por %s: %s", acao, user.email, json.dumps(args, ensure_ascii=False)[:300])
+        try:
+            resultado = await _execute_tool(db, user, acao, args)
+        except Exception as exc:
+            logger.exception("Erro na ferramenta %s (cli)", acao)
+            resultado = f"Erro ao executar {acao}: {exc}"
+        tool_results.append(f"[{acao} {json.dumps(args, ensure_ascii=False)}]\n{resultado}")
+
+    return "Nao consegui concluir a consulta agora. Tente novamente ou abra um chamado para a equipe de TI."
+
+
 async def ask_claude(db: AsyncSession, user: User, message: str) -> BotConversation:
     """Responde a mensagem do usuario e persiste o par pergunta/resposta.
 
-    Levanta BotNotConfigured (sem chave) ou BotUnavailable (falha na API); nesses
-    casos nada e gravado, para o historico nao ficar com mensagens de erro.
+    Levanta BotNotConfigured (sem provedor) ou BotUnavailable (falha na API/CLI);
+    nesses casos nada e gravado, para o historico nao ficar com mensagens de erro.
     """
-    if not is_configured():
+    prov = provider()
+    if prov is None:
         raise BotNotConfigured()
 
     history = await get_conversation_history(db, user.id)
     articles = await list_knowledge(db, only_active=True)
+    history_msgs = _history_to_messages(history)
+
+    if prov == PROVIDER_CLI:
+        try:
+            answer = await _call_claude_cli(db, user, articles, history_msgs, message)
+        except claude_cli.ClaudeCliError as exc:
+            logger.error("SuporteBot (cli): %s", exc)
+            raise BotUnavailable(str(exc)) from exc
+        await save_message(db, user.id, "user", message)
+        return await save_message(db, user.id, "assistant", answer)
+
     system = _build_system(articles, user)
-    messages = _history_to_messages(history)
-    messages.append({"role": "user", "content": message})
+    messages = history_msgs + [{"role": "user", "content": message}]
 
     try:
         answer = await _call_claude(db, user, system, messages)

@@ -17,6 +17,7 @@ Fluxo de dados: Frontend -> `src/api/*` (axios) -> nginx (ou proxy dev) -> FastA
 | Arquivo | Para que existe |
 |---|---|
 | `docker-compose.yml` | Sobe o stack de producao: `postgres` (15-alpine), `backend` (FastAPI porta 8000) e `frontend` (nginx porta 3000). O backend le o `.env` da raiz. Persiste uploads em volume e o Postgres em `pgdata`. |
+| `claude/Dockerfile`, `claude/claude_server.js` | Conteiner `chamados-claude`: Claude Code CLI autenticado com a conta Claude do chatbot (volume `claude_home/`, git-ignored), exposto ao backend como micro-servico HTTP (`GET /status`, `POST /exec`) so na rede do compose. Copia do `fedhub-claude` (FedHub-Backend, ADR-0052). |
 | `.env.example` | Modelo de todas as variaveis usadas pelo sistema (DB, JWT, CORS, Google OAuth, SMTP, frontend). Na raiz servem ao docker-compose; os mesmos valores precisam existir em `backend/.env` e `frontend/.env` para o modo local. |
 | `.gitignore` | Mantem fora do git segredos (`.env`), venv, `node_modules`, DBs (`*.db`), logs e artefatos (logo/favicon sao branding interno). |
 | `README.md` | Visao geral do projeto para quem chega. |
@@ -88,7 +89,8 @@ Fluxo de dados: Frontend -> `src/api/*` (axios) -> nginx (ou proxy dev) -> FastA
 ### `app/services/` (logica de negocio)
 | Arquivo | Para que existe |
 |---|---|
-| `bot_service.py` | Integracao com a Claude via SDK `anthropic`: monta o prompt de sistema (regras + base de conhecimento com cache de prompt + dados do usuario), reenvia o historico recente, roda o loop de ferramentas (`buscar_chamados_resolvidos`, `meus_chamados`, `abrir_chamado`) e persiste pergunta/resposta. |
+| `claude_cli.py` | Cliente do Claude Code CLI para o provedor `claude_cli`: `status()` e `exec_prompt()` por HTTP (`CLAUDE_URL`, conteiner) ou subprocesso local (`claude -p --tools "" --json-schema`). Mapeia erros de login/limite de uso em mensagens tratadas. |
+| `bot_service.py` | Integracao com a Claude (provedor `api` via SDK `anthropic`, ou `claude_cli` com ferramentas emuladas por JSON tipado): monta o prompt de sistema (regras + base de conhecimento com cache de prompt + dados do usuario), reenvia o historico recente, roda o loop de ferramentas (`buscar_chamados_resolvidos`, `meus_chamados`, `abrir_chamado`) e persiste pergunta/resposta. |
 | `auth_service.py` | JWT (create/decode access+refresh), hash/verificacao de senha (bcrypt via passlib), `verify_google_token` (chama `https://oauth2.googleapis.com/tokeninfo` com httpx e valida `aud`, `email`, `email_verified`, `hd`/dominio), login por senha e busca de usuario por id. |
 | `ticket_service.py` | O coracao das regras do chamado: SLA por prioridade (critical 4h / high 8h / medium 24h / low 72h), **maquina de estados com permissoes** (`can_transition`: STAFF_TRANSITIONS x CREATOR_TRANSITIONS — o criador confirma solucao fechando ou devolvendo `resolved->in_progress`), listagem com filtros/paginacao/RBAC, mudanca de status/prioridade/atribuicao e registro de cada acao no historico. |
 | `chat_service.py` | Persistencia de mensagens do chat, exclusao em cascata e calculo de notificacoes nao lidas por usuario. |

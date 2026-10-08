@@ -9,6 +9,7 @@ import {
   deleteKnowledge,
   getBotStatus,
   listKnowledge,
+  providerLabel,
   updateKnowledge,
 } from '../../api/bot';
 
@@ -84,13 +85,20 @@ export default function BotKnowledgePanel() {
             procedimentos passo a passo, nomes de sistemas, quem procurar, politicas. Tecnicos tambem podem salvar
             boas respostas direto pelo chat com o botao &quot;Ensinar&quot;.
           </p>
+          {status && !status.configured && (
+            <p className="text-xs text-amber-700 mt-2">{status.detail}</p>
+          )}
         </div>
         <div className="flex items-center gap-4">
           <div className="text-right">
             <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Status</p>
-            <p className={`text-sm font-semibold ${status?.configured ? 'text-emerald-600' : 'text-amber-600'}`}>
-              {status ? (status.configured ? 'Ativo' : 'Sem ANTHROPIC_API_KEY') : '...'}
+            <p className={`text-sm font-semibold ${status?.configured ? 'text-emerald-600' : 'text-amber-600'}`} title={status?.detail}>
+              {status ? (status.configured ? 'Ativo' : 'Desativado') : '...'}
             </p>
+          </div>
+          <div className="text-right">
+            <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Provedor</p>
+            <p className="text-sm font-semibold text-slate-600" title={status?.detail}>{status ? providerLabel(status.provider) : '...'}</p>
           </div>
           <div className="text-right">
             <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Modelo</p>

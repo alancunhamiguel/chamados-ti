@@ -58,3 +58,6 @@ docker-compose.override.yml
 .coverage
 htmlcov/
 .pytest_cache/
+
+# Credenciais da conta Claude do SuporteBot (volume do conteiner chamados-claude)
+claude_home/

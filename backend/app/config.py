@@ -39,13 +39,22 @@ class Settings(BaseSettings):
     UPLOAD_DIR: str = "app/uploads"
     MAX_FILE_SIZE: int = 50 * 1024 * 1024
 
-    # SuporteBot (Claude via API da Anthropic). Sem ANTHROPIC_API_KEY o bot fica
-    # desativado e o endpoint responde 503 explicando como configurar.
+    # SuporteBot. Dois provedores:
+    #   api        -> API da Anthropic por token (ANTHROPIC_API_KEY)
+    #   claude_cli -> Claude Code CLI da assinatura do Grupo, via conteiner chamados-claude
+    #                 (CLAUDE_URL, mesmo padrao do fedhub-claude) ou binario local (CLAUDE_BIN)
+    # BOT_PROVIDER=auto escolhe: api se houver chave, senao claude_cli se houver CLAUDE_URL.
+    BOT_PROVIDER: str = "auto"          # auto | api | claude_cli
     ANTHROPIC_API_KEY: str = ""
-    BOT_MODEL: str = "claude-opus-5-5"
-    BOT_EFFORT: str = "medium"          # low | medium | high | xhigh | max
+    BOT_MODEL: str = "claude-opus-5-5"  # modelo do provedor api
+    BOT_EFFORT: str = "medium"          # low | medium | high | xhigh | max (provedor api)
     BOT_MAX_HISTORY: int = 40           # mensagens anteriores enviadas como contexto
-    BOT_FALLBACKS: bool = True          # fallback automatico se o modelo recusar por politica
+    BOT_FALLBACKS: bool = True          # fallback automatico se o modelo recusar por politica (api)
+    CLAUDE_URL: str = ""                # ex.: http://chamados-claude:8788 (claude_server.js)
+    CLAUDE_BIN: str = "claude"          # modo local sem CLAUDE_URL: binario do Claude Code CLI
+    CLAUDE_CONFIG_DIR: str = ""         # modo local: pasta com o .credentials.json da conta do bot
+    BOT_CLI_MODEL: str = ""             # modelo no CLI ("" = padrao do plano; ex.: sonnet, opus)
+    BOT_CLI_TIMEOUT: int = 120          # segundos por chamada ao CLI
 
     class Config:
         env_file = _resolve_env_file()

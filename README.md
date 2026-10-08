@@ -73,10 +73,12 @@ Para habilitar o botão **Entrar com Google**:
 O SuporteBot aparece para todos no painel de chats (botão flutuante no canto inferior direito).
 Ele responde dúvidas de TI, consulta chamados já resolvidos para reaproveitar soluções, lista os
 chamados do usuário e abre um chamado em nome dele quando o problema não se resolve pelo chat.
+Há duas formas de ligar o bot; `BOT_PROVIDER=auto` escolhe sozinho (API se houver chave, senão CLI).
 
-1. Crie uma chave no **Console da Anthropic** (https://platform.claude.com, menu *API Keys*).
-   Aviso: a assinatura Claude Teams (app claude.ai) **não** inclui acesso à API; o Console é
-   uma conta à parte com cobrança por uso.
+**Opção A: API da Anthropic (cobrança por token)**
+
+1. Crie uma chave no Console da Anthropic (https://platform.claude.com, menu *API Keys*).
+   A assinatura Claude Teams (app claude.ai) não inclui acesso à API.
 2. Preencha em `backend/.env`:
 
 ```env
@@ -85,7 +87,24 @@ BOT_MODEL=claude-opus-5-5
 BOT_EFFORT=medium
 ```
 
-3. Reinicie o backend. Sem a chave o bot continua visível, mas avisa que está desativado.
+**Opção B: assinatura Claude do Grupo via contêiner `chamados-claude` (padrão do FedHub)**
+
+Mesma receita do `fedhub-claude` (FedHub-Backend, ADR-0052): um contêiner com o Claude Code CLI
+autenticado com a conta Claude dedicada ao chatbot, exposto só na rede interna do compose.
+
+1. Numa máquina com o Claude Code instalado, entre com a conta do chatbot: `claude login`.
+2. Copie `~/.claude/.credentials.json` (no Windows, `%USERPROFILE%\.claude\.credentials.json`)
+   para `claude_home/.credentials.json` na raiz deste projeto (pasta git-ignored).
+3. `docker compose up --build`. O compose já injeta `CLAUDE_URL=http://chamados-claude:8788` no
+   backend. Verifique em *Admin > SuporteBot* se o status mostra "Claude Code (claude.ai / plano team)".
+
+Para desenvolvimento local sem Docker: `node claude/claude_server.js` numa máquina logada com a conta
+do bot e `CLAUDE_URL=http://localhost:8788` no `backend/.env`; ou `BOT_PROVIDER=claude_cli` com o
+binário `claude` no PATH (opcionalmente `CLAUDE_CONFIG_DIR` apontando para a pasta com o
+`.credentials.json` da conta do bot).
+
+Limites da opção B: o uso compete com a cota da assinatura, o token OAuth pode expirar (basta recopiar
+o arquivo) e cada chamada carrega o prompt fixo do CLI, então é um pouco mais lenta que a API.
 
 **Como o bot aprende:** em *Admin > SuporteBot* a equipe cadastra artigos (procedimentos, sistemas
 internos, políticas). Todo artigo ativo entra no prompt do bot em cada resposta. Técnicos e admins

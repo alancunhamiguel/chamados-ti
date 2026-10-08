@@ -19,8 +19,8 @@ router = APIRouter()
 settings = get_settings()
 
 NOT_CONFIGURED_MSG = (
-    "SuporteBot desativado: defina ANTHROPIC_API_KEY no backend/.env "
-    "(chave do Console da Anthropic) e reinicie o servidor."
+    "SuporteBot desativado: defina ANTHROPIC_API_KEY (API da Anthropic) ou CLAUDE_URL "
+    "(conteiner chamados-claude com a assinatura) no backend/.env e reinicie o servidor."
 )
 
 
@@ -39,7 +39,9 @@ class BotMessageResponse(BaseModel):
 
 class BotStatusResponse(BaseModel):
     configured: bool
+    provider: str | None = None   # "api" | "claude_cli" | None
     model: str
+    detail: str = ""
     knowledge_articles: int
 
 
@@ -95,12 +97,7 @@ def _parse_uuid(value: str) -> uuid.UUID:
 
 @router.get("/status", response_model=BotStatusResponse, summary="Situacao do SuporteBot")
 async def bot_status(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
-    articles = await bot_service.list_knowledge(db, only_active=True)
-    return BotStatusResponse(
-        configured=bot_service.is_configured(),
-        model=settings.BOT_MODEL,
-        knowledge_articles=len(articles),
-    )
+    return BotStatusResponse(**await bot_service.get_status(db))
 
 
 @router.post("/chat", response_model=BotMessageResponse, summary="Enviar mensagem para o SuporteBot")

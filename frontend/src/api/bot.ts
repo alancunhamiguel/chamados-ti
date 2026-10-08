@@ -9,9 +9,14 @@ export interface BotMessage {
 
 export interface BotStatus {
   configured: boolean;
+  provider: 'api' | 'claude_cli' | null;
   model: string;
+  detail: string;
   knowledge_articles: number;
 }
+
+export const providerLabel = (p: BotStatus['provider']) =>
+  p === 'api' ? 'API da Anthropic' : p === 'claude_cli' ? 'Assinatura Claude (CLI)' : 'Nao configurado';
 
 export interface BotKnowledge {
   id: string;

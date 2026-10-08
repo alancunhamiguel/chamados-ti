@@ -1,8 +1,9 @@
+import json
 import pytest
 from unittest.mock import patch, AsyncMock
 from httpx import AsyncClient, ASGITransport
 from app.main import app
-from app.services import bot_service
+from app.services import bot_service, claude_cli
 
 transport = ASGITransport(app=app)
 
@@ -13,11 +14,14 @@ def _auth(token: str) -> dict:
 
 @pytest.mark.asyncio
 async def test_chat_returns_503_when_not_configured(seed_data, employee_token):
-    with patch.object(bot_service, "is_configured", return_value=False):
+    with patch.object(bot_service, "provider", return_value=None):
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             response = await client.post("/api/bot/chat", json={"message": "oi"}, headers=_auth(employee_token))
+            status = await client.get("/api/bot/status", headers=_auth(employee_token))
     assert response.status_code == 503
     assert "ANTHROPIC_API_KEY" in response.json()["detail"]
+    assert status.json()["configured"] is False
+    assert status.json()["provider"] is None
 
 
 @pytest.mark.asyncio
@@ -28,7 +32,7 @@ async def test_chat_saves_history_and_clears(seed_data, employee_token):
         assert messages[-1] == {"role": "user", "content": "Minha impressora nao imprime"}
         return "Tente reiniciar a impressora."
 
-    with patch.object(bot_service, "is_configured", return_value=True), \
+    with patch.object(bot_service, "provider", return_value="api"), \
          patch.object(bot_service, "_call_claude", side_effect=fake_call):
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             response = await client.post(
@@ -55,7 +59,7 @@ async def test_chat_saves_history_and_clears(seed_data, employee_token):
 
 @pytest.mark.asyncio
 async def test_chat_api_failure_returns_502_and_saves_nothing(seed_data, employee_token):
-    with patch.object(bot_service, "is_configured", return_value=True), \
+    with patch.object(bot_service, "provider", return_value="api"), \
          patch.object(bot_service, "_call_claude", AsyncMock(side_effect=bot_service.BotUnavailable("fora do ar"))):
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             response = await client.post("/api/bot/chat", json={"message": "oi"}, headers=_auth(employee_token))
@@ -63,6 +67,82 @@ async def test_chat_api_failure_returns_502_and_saves_nothing(seed_data, employe
             history = await client.get("/api/bot/history", headers=_auth(employee_token))
             assert history.json() == []
 
+
+# ----------------------------- provedor claude_cli ------------------------- #
+
+@pytest.mark.asyncio
+async def test_cli_provider_runs_emulated_tool_loop(seed_data, employee_token):
+    prompts: list[str] = []
+
+    async def fake_exec(prompt, schema=None, model=None, timeout_s=None):
+        prompts.append(prompt)
+        assert schema is bot_service.CLI_SCHEMA
+        if len(prompts) == 1:
+            return json.dumps({"acao": "buscar_chamados_resolvidos", "resposta": "", "termo": "impressora"})
+        return json.dumps({"acao": "responder", "resposta": "Reinicie a impressora e tente de novo."})
+
+    with patch.object(bot_service, "provider", return_value="claude_cli"), \
+         patch.object(claude_cli, "exec_prompt", side_effect=fake_exec):
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            response = await client.post(
+                "/api/bot/chat", json={"message": "Minha impressora nao imprime"}, headers=_auth(employee_token),
+            )
+            assert response.status_code == 200
+            assert response.json()["content"] == "Reinicie a impressora e tente de novo."
+            history = await client.get("/api/bot/history", headers=_auth(employee_token))
+            assert [m["role"] for m in history.json()] == ["user", "assistant"]
+
+    assert len(prompts) == 2
+    # a secao de resultados so aparece a partir da segunda rodada (as instrucoes citam o nome)
+    assert "## RESULTADOS DE FERRAMENTAS" not in prompts[0]
+    assert "Employee Test" in prompts[0]
+    assert "## RESULTADOS DE FERRAMENTAS" in prompts[1]
+    assert "Nenhum chamado resolvido encontrado para 'impressora'" in prompts[1]
+
+
+@pytest.mark.asyncio
+async def test_cli_provider_error_returns_502(seed_data, employee_token):
+    with patch.object(bot_service, "provider", return_value="claude_cli"), \
+         patch.object(claude_cli, "exec_prompt", AsyncMock(side_effect=claude_cli.ClaudeCliError("Conta Claude do SuporteBot sem login."))):
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            response = await client.post("/api/bot/chat", json={"message": "oi"}, headers=_auth(employee_token))
+            assert response.status_code == 502
+            assert "sem login" in response.json()["detail"]
+            history = await client.get("/api/bot/history", headers=_auth(employee_token))
+            assert history.json() == []
+
+
+@pytest.mark.asyncio
+async def test_cli_status_reports_login(seed_data, employee_token):
+    bot_service._cli_status_cache["data"] = None
+    with patch.object(bot_service, "provider", return_value="claude_cli"), \
+         patch.object(claude_cli, "status", AsyncMock(return_value={"instalado": True, "logado": True, "detalhe": "claude.ai / plano team"})):
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            status = await client.get("/api/bot/status", headers=_auth(employee_token))
+    bot_service._cli_status_cache["data"] = None
+    assert status.status_code == 200
+    assert status.json()["configured"] is True
+    assert status.json()["provider"] == "claude_cli"
+    assert "plano team" in status.json()["detail"]
+
+
+def test_parse_cli_output_fallbacks():
+    assert bot_service._parse_cli_output('{"acao": "responder", "resposta": "ok"}') == {"acao": "responder", "resposta": "ok"}
+    # texto com JSON embutido
+    assert bot_service._parse_cli_output('Segue: {"acao": "meus_chamados", "resposta": ""} fim')["acao"] == "meus_chamados"
+    # texto solto vira resposta direta
+    assert bot_service._parse_cli_output("Tente reiniciar.") == {"acao": "responder", "resposta": "Tente reiniciar."}
+    # acao desconhecida cai em responder
+    assert bot_service._parse_cli_output('{"acao": "formatar", "resposta": "x"}')["acao"] == "responder"
+
+
+def test_cli_error_mapping():
+    assert "sem login" in str(claude_cli._mapear_erro("claude falhou (not logged in)", "http"))
+    assert "Limite de uso" in str(claude_cli._mapear_erro("usage limit reached", "http"))
+    assert "Claude Code falhou" in str(claude_cli._mapear_erro("boom", "rc=1"))
+
+
+# ----------------------------- base de conhecimento ------------------------- #
 
 @pytest.mark.asyncio
 async def test_knowledge_crud_requires_staff(seed_data, employee_token, tech_token):
@@ -97,9 +177,11 @@ async def test_knowledge_crud_requires_staff(seed_data, employee_token, tech_tok
         assert listed.status_code == 200
         assert len(listed.json()) == 1
 
-        status = await client.get("/api/bot/status", headers=_auth(employee_token))
+        with patch.object(bot_service, "provider", return_value="api"):
+            status = await client.get("/api/bot/status", headers=_auth(employee_token))
         assert status.status_code == 200
         assert status.json()["knowledge_articles"] == 0  # artigo inativo nao conta
+        assert status.json()["provider"] == "api"
 
         deleted = await client.delete(f"/api/bot/knowledge/{art['id']}", headers=_auth(tech_token))
         assert deleted.status_code == 200
@@ -115,6 +197,9 @@ async def test_knowledge_enters_system_prompt(seed_data, db):
     assert "[acesso]" in knowledge_text
     assert system[1]["cache_control"] == {"type": "ephemeral"}
     assert "Employee Test" in system[2]["text"]
+    # o prompt do CLI leva o mesmo conteudo em texto unico
+    cli_prompt = bot_service._build_cli_prompt([art], seed_data["employee"], [], "oi", [])
+    assert "Reset de senha" in cli_prompt and "Formato de resposta" in cli_prompt
 
 
 @pytest.mark.asyncio

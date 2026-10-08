@@ -18,13 +18,35 @@ services:
   backend:
     build: ./backend
     env_file: .env
+    environment:
+      # SuporteBot via assinatura Claude (conteiner chamados-claude). Se ANTHROPIC_API_KEY
+      # estiver no .env, a API tem preferencia (BOT_PROVIDER=auto).
+      - CLAUDE_URL=http://chamados-claude:8788
     ports:
       - "8000:8000"
     depends_on:
       postgres:
         condition: service_healthy
+      chamados-claude:
+        condition: service_started
     volumes:
       - ./backend/app/uploads:/app/app/uploads
+
+  # Claude Code CLI autenticado com a conta Claude do chatbot, exposto so na rede
+  # interna do compose (mesma receita do fedhub-claude). Credenciais em ./claude_home
+  # (git-ignored): copie o ~/.claude/.credentials.json de uma sessao `claude` logada
+  # com a conta do bot.
+  chamados-claude:
+    build: ./claude
+    container_name: chamados-claude
+    restart: unless-stopped
+    environment:
+      - CLAUDE_CONFIG_DIR=/root/.claude-home
+      - CLAUDE_SERVER_PORT=8788
+    expose:
+      - "8788"
+    volumes:
+      - ./claude_home:/root/.claude-home
 
   frontend:
     build: ./frontend

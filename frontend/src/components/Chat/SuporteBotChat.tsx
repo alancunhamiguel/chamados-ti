@@ -188,7 +188,7 @@ export default function SuporteBotChat({ onBack, onClose }: SuporteBotChatProps)
       {!configured && (
         <div className="bg-amber-50 border-b border-amber-200 px-4 py-2.5">
           <p className="text-xs text-amber-800 leading-relaxed">
-            O SuporteBot ainda nao foi configurado. {isStaff ? 'Defina ANTHROPIC_API_KEY no backend/.env e reinicie o servidor.' : 'Avise a equipe de TI.'}
+            O SuporteBot esta desativado. {isStaff ? (status?.detail || 'Defina ANTHROPIC_API_KEY ou CLAUDE_URL no backend/.env e reinicie o servidor.') : 'Avise a equipe de TI.'}
           </p>
         </div>
       )}

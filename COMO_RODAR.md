@@ -198,11 +198,21 @@ VITE_API_URL=http://localhost:8000/api
 
 | Variavel | Padrao | Descricao |
 |---|---|---|
-| `ANTHROPIC_API_KEY` | (vazio) | Chave do Console da Anthropic (platform.claude.com). Vazia = bot desativado. |
-| `BOT_MODEL` | `claude-opus-5-5` | Modelo usado nas respostas. |
-| `BOT_EFFORT` | `medium` | Profundidade de raciocinio: `low`, `medium`, `high`, `xhigh`, `max`. |
+| `BOT_PROVIDER` | `auto` | `api` (chave), `claude_cli` (assinatura via Claude Code) ou `auto` (API se houver chave, senao CLI se houver `CLAUDE_URL`). |
+| `ANTHROPIC_API_KEY` | (vazio) | Chave do Console da Anthropic (platform.claude.com) para o provedor `api`. |
+| `BOT_MODEL` | `claude-opus-5-5` | Modelo do provedor `api`. |
+| `BOT_EFFORT` | `medium` | Profundidade de raciocinio no provedor `api`: `low`, `medium`, `high`, `xhigh`, `max`. |
 | `BOT_MAX_HISTORY` | `40` | Quantas mensagens anteriores do usuario vao como contexto. |
-| `BOT_FALLBACKS` | `true` | Se o modelo recusar por politica, a API tenta um modelo alternativo. Desative se a API rejeitar o parametro. |
+| `BOT_FALLBACKS` | `true` | Provedor `api`: se o modelo recusar por politica, a API tenta um modelo alternativo. |
+| `CLAUDE_URL` | (vazio) | URL do `claude_server.js` (conteiner `chamados-claude`: `http://chamados-claude:8788`, ja injetado pelo compose). |
+| `CLAUDE_BIN` | `claude` | Modo local do CLI (sem `CLAUDE_URL`): binario do Claude Code. |
+| `CLAUDE_CONFIG_DIR` | (vazio) | Modo local: pasta com o `.credentials.json` da conta do bot. |
+| `BOT_CLI_MODEL` | (vazio) | Modelo no CLI (`sonnet`, `opus`...). Vazio = padrao da assinatura. |
+| `BOT_CLI_TIMEOUT` | `120` | Segundos por chamada ao CLI. |
+
+Credenciais do conteiner `chamados-claude`: copie `~/.claude/.credentials.json` de uma sessao `claude login`
+feita com a conta do chatbot para `./claude_home/` (git-ignored). Sem esse arquivo o status do bot mostra
+"Claude Code sem login".
 
 ## Endpoints da API
 
