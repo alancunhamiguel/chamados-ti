@@ -2,8 +2,10 @@ from app.models.enums import UserRole, TicketStatus, TicketPriority, OnlineStatu
 from app.models.user import User
 from app.models.ticket import Ticket, Sector
 from app.models.comment import TicketComment, TicketAttachment, TicketHistory
+from app.models.bot_conversation import BotConversation, BotKnowledge
 
 __all__ = [
     "User", "Ticket", "Sector", "TicketComment", "TicketAttachment", "TicketHistory",
     "UserRole", "TicketStatus", "TicketPriority", "OnlineStatus",
+    "BotConversation", "BotKnowledge",
 ]

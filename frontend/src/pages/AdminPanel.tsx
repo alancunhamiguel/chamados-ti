@@ -2,6 +2,7 @@ import { useState, Fragment } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../api/client';
 import { useToast } from '../contexts/ToastContext';
+import BotKnowledgePanel from '../components/Bot/BotKnowledgePanel';
 
 const roleLabels: Record<string, string> = {
   admin: 'Administrador',
@@ -16,7 +17,7 @@ const roleBadgeColors: Record<string, string> = {
 };
 
 export default function AdminPanel() {
-  const [activeTab, setActiveTab] = useState<'users' | 'sectors'>('users');
+  const [activeTab, setActiveTab] = useState<'users' | 'sectors' | 'bot'>('users');
   const [editingUser, setEditingUser] = useState<any>(null);
   const [editForm, setEditForm] = useState({ name: '', email: '', role: '', sector: '', is_active: true });
   const [editingSector, setEditingSector] = useState<any>(null);
@@ -175,7 +176,19 @@ export default function AdminPanel() {
         >
           Setores
         </button>
+        <button
+          onClick={() => setActiveTab('bot')}
+          className={`px-5 py-2.5 rounded-lg text-sm font-semibold transition-all ${
+            activeTab === 'bot'
+              ? 'bg-primary-500 text-white shadow-sm'
+              : 'bg-white text-slate-500 hover:bg-slate-50 border border-surface-200'
+          }`}
+        >
+          SuporteBot
+        </button>
       </div>
+
+      {activeTab === 'bot' && <BotKnowledgePanel />}
 
       {/* Users Table */}
       {activeTab === 'users' && (

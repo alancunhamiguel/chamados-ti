@@ -13,6 +13,7 @@ Sistema web completo para gestão de chamados de TI (helpdesk), permitindo que c
 - **Histórico completo** de todas as ações
 - **Notificações por e-mail** (templates prontos)
 - **Chat em tempo real** por chamado (REST + WebSocket)
+- **SuporteBot**: assistente de TI com Claude no painel de chats, com base de conhecimento alimentada pela equipe
 - **Autenticação JWT** e **login com Google** (roles employee, technician, admin)
 - **Permissões por role** (employee, technician, admin)
 
@@ -66,6 +67,30 @@ Para habilitar o botão **Entrar com Google**:
 2. Em **Authorized JavaScript origins**, adicione `http://localhost:3000` e `http://127.0.0.1:3000`.
 3. Preencha no `backend/.env`: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` e `GOOGLE_ALLOWED_DOMAIN`.
 4. No `frontend/.env`: `VITE_GOOGLE_CLIENT_ID` com o mesmo Client ID.
+
+### Configuração do SuporteBot (Claude)
+
+O SuporteBot aparece para todos no painel de chats (botão flutuante no canto inferior direito).
+Ele responde dúvidas de TI, consulta chamados já resolvidos para reaproveitar soluções, lista os
+chamados do usuário e abre um chamado em nome dele quando o problema não se resolve pelo chat.
+
+1. Crie uma chave no **Console da Anthropic** (https://platform.claude.com, menu *API Keys*).
+   Aviso: a assinatura Claude Teams (app claude.ai) **não** inclui acesso à API; o Console é
+   uma conta à parte com cobrança por uso.
+2. Preencha em `backend/.env`:
+
+```env
+ANTHROPIC_API_KEY=sk-ant-...
+BOT_MODEL=claude-opus-5-5
+BOT_EFFORT=medium
+```
+
+3. Reinicie o backend. Sem a chave o bot continua visível, mas avisa que está desativado.
+
+**Como o bot aprende:** em *Admin > SuporteBot* a equipe cadastra artigos (procedimentos, sistemas
+internos, políticas). Todo artigo ativo entra no prompt do bot em cada resposta. Técnicos e admins
+também podem salvar uma boa resposta direto no chat com o botão **Ensinar**. O bot ainda lembra o
+histórico de cada usuário e consulta as respostas públicas da equipe em chamados resolvidos.
 
 ### Frontend
 

@@ -194,6 +194,16 @@ VITE_API_URL=http://localhost:8000/api
 
 ---
 
+### SuporteBot (Claude)
+
+| Variavel | Padrao | Descricao |
+|---|---|---|
+| `ANTHROPIC_API_KEY` | (vazio) | Chave do Console da Anthropic (platform.claude.com). Vazia = bot desativado. |
+| `BOT_MODEL` | `claude-opus-5-5` | Modelo usado nas respostas. |
+| `BOT_EFFORT` | `medium` | Profundidade de raciocinio: `low`, `medium`, `high`, `xhigh`, `max`. |
+| `BOT_MAX_HISTORY` | `40` | Quantas mensagens anteriores do usuario vao como contexto. |
+| `BOT_FALLBACKS` | `true` | Se o modelo recusar por politica, a API tenta um modelo alternativo. Desative se a API rejeitar o parametro. |
+
 ## Endpoints da API
 
 ### Auth
@@ -245,6 +255,16 @@ VITE_API_URL=http://localhost:8000/api
 | DELETE | /api/users/{id}         | Desativar         |
 
 ---
+
+### SuporteBot
+| Metodo | Rota | Quem | Descricao |
+|---|---|---|---|
+| GET | `/api/bot/status` | todos | Se esta configurado, modelo e quantidade de artigos ativos |
+| POST | `/api/bot/chat` | todos | Envia mensagem e recebe a resposta (503 sem chave, 502 se a API falhar) |
+| GET | `/api/bot/history` | todos | Historico do proprio usuario com o bot |
+| DELETE | `/api/bot/history` | todos | Limpa o proprio historico |
+| GET/POST | `/api/bot/knowledge` | tecnico/admin | Lista / cria artigos da base de conhecimento |
+| PUT/DELETE | `/api/bot/knowledge/{id}` | tecnico/admin | Edita (inclui ativar/desativar) / exclui artigo |
 
 ## Regras de Negocio
 

@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useChat } from '../../contexts/ChatContext';
 import api from '../../api/client';
+import SuporteBotChat from './SuporteBotChat';
 
 interface ChatMessage {
   id: string;
@@ -40,6 +41,7 @@ export default function ChatDock() {
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
   const [wsOnline, setWsOnline] = useState(false);
+  const [botChatOpen, setBotChatOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -163,6 +165,21 @@ export default function ChatDock() {
     }
   };
 
+  // When the bot chat is open, close any active ticket chat
+  const openBotChat = () => {
+    backToList();
+    setBotChatOpen(true);
+  };
+
+  const closeBotChat = () => {
+    setBotChatOpen(false);
+  };
+
+  // Determine current view
+  const showingBot = botChatOpen && !activeChatId;
+  const showingTicketChat = !!activeChatId && !botChatOpen;
+  const showingList = !showingBot && !showingTicketChat;
+
   return (
     <>
       {!dockOpen && (
@@ -186,102 +203,153 @@ export default function ChatDock() {
       {dockOpen && (
         <div className="fixed bottom-0 right-4 z-50" style={{ width: '380px' }}>
           <div className="bg-white rounded-t-2xl shadow-2xl border border-surface-200 overflow-hidden flex flex-col" style={{ height: '560px', boxShadow: '0 -8px 40px rgba(0, 0, 0, 0.15), 0 -4px 20px rgba(0, 102, 255, 0.08)' }}>
-            {/* Header */}
-            <div className="bg-primary-500 text-white px-4 py-3 flex items-center justify-between">
-              {activeChatId ? (
-                <div className="flex items-center gap-2 min-w-0">
-                  <button onClick={backToList} className="p-1.5 hover:bg-white/20 rounded-lg transition-colors flex-shrink-0" title="Voltar para as conversas">
+
+            {/* ===== SuporteBot Chat View ===== */}
+            {showingBot && (
+              <SuporteBotChat
+                onBack={closeBotChat}
+                onClose={() => setDockOpen(false)}
+              />
+            )}
+
+            {/* ===== Conversation List Header ===== */}
+            {showingList && (
+              <>
+                <div className="bg-primary-500 text-white px-4 py-3 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                     </svg>
-                  </button>
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold truncate">Chamado {activeTicket?.ticketNumber ? `#${activeTicket.ticketNumber}` : ''}</p>
-                    <div className="flex items-center gap-1.5">
-                      <span className={`w-2 h-2 rounded-full ${wsOnline ? 'bg-emerald-400' : 'bg-amber-300'}`}></span>
-                      <span className="text-[10px] text-white/80">{wsOnline ? 'Online' : 'Atualizando...'}</span>
-                    </div>
+                    <p className="text-sm font-semibold">Conversas {openChats.length > 0 && <span className="ml-1 text-white/70">({openChats.length})</span>}</p>
+                  </div>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <button onClick={() => setDockOpen(false)} className="p-1.5 hover:bg-white/20 rounded-lg transition-colors" title="Fechar">
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
                   </div>
                 </div>
-              ) : (
-                <div className="flex items-center gap-2">
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                  </svg>
-                  <p className="text-sm font-semibold">Conversas {openChats.length > 0 && <span className="ml-1 text-white/70">({openChats.length})</span>}</p>
-                </div>
-              )}
-              <div className="flex items-center gap-2 flex-shrink-0">
-                {activeChatId && totalUnread > 0 && (
-                  <span className="min-w-5 h-5 px-1.5 bg-white text-primary-500 rounded-full text-[10px] font-bold flex items-center justify-center">
-                    {totalUnread}
-                  </span>
-                )}
-                <button onClick={() => setDockOpen(false)} className="p-1.5 hover:bg-white/20 rounded-lg transition-colors" title="Fechar">
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-            </div>
 
-            {!activeChatId ? (
-              /* ---------- Conversation list ---------- */
-              <div className="flex-1 overflow-y-auto">
-                {openChats.length === 0 ? (
-                  <div className="h-full flex flex-col items-center justify-center text-center p-6">
-                    <div className="w-12 h-12 bg-slate-200 rounded-full flex items-center justify-center mb-3">
-                      <svg className="w-6 h-6 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                <div className="flex-1 overflow-y-auto">
+                  {/* ===== SuporteBot Fixed Entry ===== */}
+                  <div
+                    onClick={openBotChat}
+                    className="flex items-center gap-3 px-4 py-3 border-b border-violet-100 hover:bg-violet-50/50 cursor-pointer transition-colors bg-gradient-to-r from-violet-50/30 to-transparent"
+                  >
+                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-violet-500 to-purple-500 flex items-center justify-center flex-shrink-0 shadow-sm">
+                      <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9.75 3.104v5.714a2.25 2.25 0 01-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 014.5 0m0 0v5.714c0 .597.237 1.17.659 1.591L19.8 15.3M14.25 3.104c.251.023.501.05.75.082M19.8 15.3l-1.57.393A9.065 9.065 0 0112 15a9.065 9.065 0 00-6.23.693L5 14.5m14.8.8l1.402 1.402c1.232 1.232.65 3.318-1.067 3.611A48.309 48.309 0 0112 21c-2.773 0-5.491-.235-8.135-.687-1.718-.293-2.3-2.379-1.067-3.61L5 14.5" />
                       </svg>
                     </div>
-                    <p className="text-sm text-slate-400">Nenhuma conversa aberta</p>
-                    <p className="text-xs text-slate-300 mt-1">Abra um chamado e clique em &quot;Abrir Chat&quot;</p>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-semibold text-slate-700">SuporteBot</p>
+                        <span className="px-1.5 py-0.5 bg-violet-100 text-violet-600 text-[9px] font-bold rounded-full uppercase tracking-wide">IA</span>
+                      </div>
+                      <p className="text-xs text-slate-400 truncate">Assistente de TI com inteligência artificial</p>
+                    </div>
+                    <div className="flex items-center gap-1 flex-shrink-0">
+                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                    </div>
                   </div>
-                ) : (
-                  openChats.map(chat => (
-                    <div
-                      key={chat.ticketId}
-                      onClick={() => selectChat(chat.ticketId)}
-                      className="flex items-center gap-3 px-4 py-3 border-b border-surface-100 hover:bg-slate-50 cursor-pointer transition-colors"
-                    >
-                      <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${chat.unread > 0 ? 'bg-primary-500' : 'bg-slate-200'}`}>
-                        <svg className={`w-5 h-5 ${chat.unread > 0 ? 'text-white' : 'text-slate-500'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+
+                  {/* ===== Separator ===== */}
+                  {openChats.length > 0 && (
+                    <div className="px-4 py-1.5 bg-slate-50 border-b border-surface-100">
+                      <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Chamados</p>
+                    </div>
+                  )}
+
+                  {/* ===== Ticket Chats ===== */}
+                  {openChats.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center text-center p-6 pt-8">
+                      <div className="w-12 h-12 bg-slate-200 rounded-full flex items-center justify-center mb-3">
+                        <svg className="w-6 h-6 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                         </svg>
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between gap-2">
-                          <p className={`text-sm truncate ${chat.unread > 0 ? 'font-bold text-slate-800' : 'font-semibold text-slate-600'}`}>
-                            Chamado {chat.ticketNumber ? `#${chat.ticketNumber}` : ''}
+                      <p className="text-sm text-slate-400">Nenhum chamado com chat aberto</p>
+                      <p className="text-xs text-slate-300 mt-1">Abra um chamado e clique em &quot;Abrir Chat&quot;</p>
+                    </div>
+                  ) : (
+                    openChats.map(chat => (
+                      <div
+                        key={chat.ticketId}
+                        onClick={() => { setBotChatOpen(false); selectChat(chat.ticketId); }}
+                        className="flex items-center gap-3 px-4 py-3 border-b border-surface-100 hover:bg-slate-50 cursor-pointer transition-colors"
+                      >
+                        <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${chat.unread > 0 ? 'bg-primary-500' : 'bg-slate-200'}`}>
+                          <svg className={`w-5 h-5 ${chat.unread > 0 ? 'text-white' : 'text-slate-500'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+                          </svg>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between gap-2">
+                            <p className={`text-sm truncate ${chat.unread > 0 ? 'font-bold text-slate-800' : 'font-semibold text-slate-600'}`}>
+                              Chamado {chat.ticketNumber ? `#${chat.ticketNumber}` : ''}
+                            </p>
+                          </div>
+                          <p className={`text-xs truncate ${chat.unread > 0 ? 'font-semibold text-slate-600' : 'text-slate-400'}`}>
+                            {chat.previewSender ? <span className="text-slate-500">{chat.previewSender}: </span> : null}
+                            {chat.preview || 'Sem mensagens'}
                           </p>
                         </div>
-                        <p className={`text-xs truncate ${chat.unread > 0 ? 'font-semibold text-slate-600' : 'text-slate-400'}`}>
-                          {chat.previewSender ? <span className="text-slate-500">{chat.previewSender}: </span> : null}
-                          {chat.preview || 'Sem mensagens'}
-                        </p>
+                        {chat.unread > 0 && (
+                          <span className="min-w-5 h-5 px-1.5 bg-primary-500 text-white rounded-full text-[10px] font-bold flex items-center justify-center flex-shrink-0">
+                            {chat.unread}
+                          </span>
+                        )}
+                        <button
+                          onClick={(e) => { e.stopPropagation(); closeChat(chat.ticketId); }}
+                          className="p-1 text-slate-300 hover:text-red-500 transition-colors flex-shrink-0"
+                          title="Remover conversa"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
                       </div>
-                      {chat.unread > 0 && (
-                        <span className="min-w-5 h-5 px-1.5 bg-primary-500 text-white rounded-full text-[10px] font-bold flex items-center justify-center flex-shrink-0">
-                          {chat.unread}
-                        </span>
-                      )}
-                      <button
-                        onClick={(e) => { e.stopPropagation(); closeChat(chat.ticketId); }}
-                        className="p-1 text-slate-300 hover:text-red-500 transition-colors flex-shrink-0"
-                        title="Remover conversa"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                      </button>
-                    </div>
-                  ))
-                )}
-              </div>
-            ) : (
-              /* ---------- Active chat ---------- */
+                    ))
+                  )}
+                </div>
+              </>
+            )}
+
+            {/* ===== Active Ticket Chat View ===== */}
+            {showingTicketChat && (
               <>
+                {/* Header */}
+                <div className="bg-primary-500 text-white px-4 py-3 flex items-center justify-between">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <button onClick={() => { backToList(); setBotChatOpen(false); }} className="p-1.5 hover:bg-white/20 rounded-lg transition-colors flex-shrink-0" title="Voltar para as conversas">
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                      </svg>
+                    </button>
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold truncate">Chamado {activeTicket?.ticketNumber ? `#${activeTicket.ticketNumber}` : ''}</p>
+                      <div className="flex items-center gap-1.5">
+                        <span className={`w-2 h-2 rounded-full ${wsOnline ? 'bg-emerald-400' : 'bg-amber-300'}`}></span>
+                        <span className="text-[10px] text-white/80">{wsOnline ? 'Online' : 'Atualizando...'}</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    {totalUnread > 0 && (
+                      <span className="min-w-5 h-5 px-1.5 bg-white text-primary-500 rounded-full text-[10px] font-bold flex items-center justify-center">
+                        {totalUnread}
+                      </span>
+                    )}
+                    <button onClick={() => setDockOpen(false)} className="p-1.5 hover:bg-white/20 rounded-lg transition-colors" title="Fechar">
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Messages */}
                 <div className="flex-1 overflow-y-auto p-4 bg-slate-50">
                   {messages.length === 0 ? (
                     <div className="h-full flex flex-col items-center justify-center text-center">
@@ -333,6 +401,7 @@ export default function ChatDock() {
                   )}
                 </div>
 
+                {/* Input */}
                 <div className="p-3 bg-white border-t border-surface-200">
                   <div className="flex items-center gap-2">
                     <input

@@ -39,6 +39,14 @@ class Settings(BaseSettings):
     UPLOAD_DIR: str = "app/uploads"
     MAX_FILE_SIZE: int = 50 * 1024 * 1024
 
+    # SuporteBot (Claude via API da Anthropic). Sem ANTHROPIC_API_KEY o bot fica
+    # desativado e o endpoint responde 503 explicando como configurar.
+    ANTHROPIC_API_KEY: str = ""
+    BOT_MODEL: str = "claude-opus-5-5"
+    BOT_EFFORT: str = "medium"          # low | medium | high | xhigh | max
+    BOT_MAX_HISTORY: int = 40           # mensagens anteriores enviadas como contexto
+    BOT_FALLBACKS: bool = True          # fallback automatico se o modelo recusar por politica
+
     class Config:
         env_file = _resolve_env_file()
         case_sensitive = True

@@ -56,6 +56,7 @@ Fluxo de dados: Frontend -> `src/api/*` (axios) -> nginx (ou proxy dev) -> FastA
 | `ticket.py` | Tabela `tickets`: numero (sequencial), titulo, descricao, status, prioridade, setor, categoria, SLA (`sla_deadline`), `resolved_at`/`closed_at` e relacoes com criador/atendente/setor/comentarios/chat/anexos/historico. |
 | `comment.py` | Tres tabelas: `ticket_comments` (comentarios publicos/internos), `ticket_attachments` (anexos com nome original + nome em disco) e `ticket_history` (linha do tempo de tudo que acontece no chamado). |
 | `chat.py` | Tabela `ticket_chat`: mensagens do chat em tempo real por chamado (inclui `is_system` para avisos automaticos). |
+| `bot_conversation.py` | Duas tabelas do SuporteBot: `bot_conversations` (historico pergunta/resposta por usuario = memoria individual) e `bot_knowledge` (artigos da base de conhecimento = memoria compartilhada, mantida pela equipe de TI). |
 | `__init__.py` | Importa os modelos para o `Base.metadata` enxerga-los (necessario para `create_all`). |
 
 ### `app/schemas/` (contratos Pydantic de entrada/saida)
@@ -78,6 +79,7 @@ Fluxo de dados: Frontend -> `src/api/*` (axios) -> nginx (ou proxy dev) -> FastA
 | `history.py` | `GET /history` — linha do tempo do chamado, respeitando acesso. |
 | `attachments.py` | Lista, upload (valida extensao, MIME real e tamanho maximo), download (serve o arquivo) e delete. Nome em disco e UUID; nome original virou XSS-safe. |
 | `chat.py` | REST de chat: historico e envio de mensagem por chamado (o tempo real vem do WS). |
+| `bot.py` | Rotas do SuporteBot (`/api/bot`): status, chat, historico do usuario e CRUD da base de conhecimento (so tecnico/admin). Sem `ANTHROPIC_API_KEY` responde 503. |
 | `ws_chat.py` | **WebSocket** `/ws/chat/{ticket_id}`: autentica via `?token=` (JWT), valida acesso ao chamado, mantem conexoes ativas por chamado, recebe mensagens, grava no banco e faz broadcast para todos conectados. Fechamento com codigos de erro (4001 token invalido, 4003 sem acesso, etc.). |
 | `dashboard.py` | Endpoints de KPIs (staff): `GET /dashboard/stats`, `by-status`, `by-priority`, `by-sector`, `by-technician`, `by-sla-compliance`. |
 | `sectors.py` | Lista setores ativos (**agora exige login** — foi corrigido), lista completa (admin), CRUD de setores (admin) com desativacao logica. |
@@ -86,6 +88,7 @@ Fluxo de dados: Frontend -> `src/api/*` (axios) -> nginx (ou proxy dev) -> FastA
 ### `app/services/` (logica de negocio)
 | Arquivo | Para que existe |
 |---|---|
+| `bot_service.py` | Integracao com a Claude via SDK `anthropic`: monta o prompt de sistema (regras + base de conhecimento com cache de prompt + dados do usuario), reenvia o historico recente, roda o loop de ferramentas (`buscar_chamados_resolvidos`, `meus_chamados`, `abrir_chamado`) e persiste pergunta/resposta. |
 | `auth_service.py` | JWT (create/decode access+refresh), hash/verificacao de senha (bcrypt via passlib), `verify_google_token` (chama `https://oauth2.googleapis.com/tokeninfo` com httpx e valida `aud`, `email`, `email_verified`, `hd`/dominio), login por senha e busca de usuario por id. |
 | `ticket_service.py` | O coracao das regras do chamado: SLA por prioridade (critical 4h / high 8h / medium 24h / low 72h), **maquina de estados com permissoes** (`can_transition`: STAFF_TRANSITIONS x CREATOR_TRANSITIONS — o criador confirma solucao fechando ou devolvendo `resolved->in_progress`), listagem com filtros/paginacao/RBAC, mudanca de status/prioridade/atribuicao e registro de cada acao no historico. |
 | `chat_service.py` | Persistencia de mensagens do chat, exclusao em cascata e calculo de notificacoes nao lidas por usuario. |
